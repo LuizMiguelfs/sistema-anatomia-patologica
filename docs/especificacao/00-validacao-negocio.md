@@ -1,4 +1,4 @@
-# [NOME DO SISTEMA] — Documento de Validação e Especificação de Negócio
+# Serviço de Anatomia Patológica (SAP) — Documento de Validação e Especificação de Negócio
 
 > **Padrão Oficial SETISD / HC-UFPE (HU Brasil) — Fase 0 (Alinhamento de Negócio)**  
 > **Público-alvo:** Profissionais das áreas envolvidas e Equipe de TI.  
@@ -8,13 +8,13 @@
 
 ## 1. Identificação do Projeto e Contexto Institucional
 
-| Campo | Descrição |
-| :--- | :--- |
-| **Nome do Sistema** | [Ex: Sistema de Gestão de Escalas / Gerenciador de Leitos UTI] |
-| **Área Solicitante / Cliente** | [Gerência, Unidade ou Setor no HC-UFPE] |
-| **Instância Superior Competente** | [Gerência à qual a área proponente esteja subordinada ou Superintendência] |
-| **Líder Técnico (SETISD)** | [Analista de TI desiginado para prestar suporte técnico] |
-| **Objetivo Estratégico HU Brasil** | [Vincular o projeto aos objetivos do HU Brasil] |
+| Campo                              | Descrição                            |
+| :--------------------------------- | :----------------------------------- |
+| **Nome do Sistema**                | Serviço de Anatomia Patológica (SAP) |
+| **Área Solicitante / Cliente**     | Setor de Anatomia Patológica         |
+| **Instância Superior Competente**  | SETISD                               |
+| **Líder Técnico (SETISD)**         | Daniel Turmina                       |
+| **Objetivo Estratégico HU Brasil** | Emissão de diagnóstico               |
 
 ---
 
@@ -23,12 +23,12 @@
 > **Objetivo:** Dizer com clareza qual é o problema real de trabalho. Sem rodeios: o que hoje está quebrado, ineficiente ou gerando risco para o hospital?
 
 * **A Dor Central:**  
-  [Resumo direto da dor em 1 ou 2 frases. *Ex: A consolidação de informações essenciais é feita de forma descentralizada e manual, gerando retrabalho constante, atrasos crônicos e risco de perda de dados.*]
+  *Preenchimento massivo de informações de entrada manual, feitas em planilhas, com alta probabilidade de erros. Ademais, há dificuldade de acesso e descentralização das informações encontradas no AGHU.*
 
 * **Por que isso não pode continuar (Impactos Reais):**
   - **Sobrecarga de Trabalho:** As chefias e equipes perdem horas redigitando dados e conferindo manualmente tarefas que poderiam ser automáticas.
   - **Falta de Visibilidade:** A gestão não sabe em tempo real quem já entregou, quem está com pendências e onde estão os gargalos.
-  - **Risco Institucional e Legal:** Falta de histórico confiável para responder a auditorias, questionamentos de órgãos de controle ou conferências internas.
+  - **Risco Institucional e Legal:** Lacunas no histórico dos dados sobre os exames realizados no setor.
 
 ---
 
@@ -37,13 +37,16 @@
 > **Objetivo:** Mapear a realidade crua de como as equipes se viram no dia a dia para realizar essa tarefa hoje.
 
 * **Meios Utilizados Hoje:**  
-  [Descreva o que usam: papel impresso físico, anotações de prancheta, planilhas Excel locais no computador, trocas de e-mail ou mensagens de WhatsApp].
+  O AGHU, onde é feito o recebimento dos exames e a entrega dos diagnósticos. A planilha no Teams, que protocola manualmente todo o processo dos diferentes tipos de exames. O WhatsApp, para comunicação interna ágil.
+
+* **Tipos de Exame do Setor:**  
+  Histopatológico (HP), Congelação (CO), Imunohistoquímico (IHQ), Citologia Geral (CG) e Cérvico-vaginal (CCV). O Imunohistoquímico é o único que não gera laudo por si só: ele complementa um exame em curso e pode participar do fechamento do diagnóstico.
 
 * **A Rotina Prática de Trabalho:**
-  1. **Início:** Alguém cria uma planilha do zero, copia o arquivo do mês anterior ou imprime formulários em papel para distribuir.
-  2. **Preenchimento:** Os responsáveis anotam as informações à mão ou digitam em suas planilhas, muitas vezes tendo que redigitar nomes de profissionais e locais que já existem nos sistemas hospitalares (como o AGHU).
-  3. **Conferência:** As folhas impressas ou arquivos vão para a chefia, que confere linha por linha no papel (com caneta) ou em telas dispersas, assinando manualmente cada página.
-  4. **Entrega e Arquivo:** As pastas físicas são transportadas até a área responsável ou enviadas por e-mail, ficando guardadas em gavetas ou pastas de rede sem garantia de qual versão é a final.
+  1. **Início:** No AGHU, é aceita a solicitação do exame. Há um grande panorama geral na anatomia patológica que se inicia no recebimento do material para análise. A depender do exame realizado, o processo inicia em fases diferentes, mas semelhantes entre si. Em todos, assim que chegam ao setor, os exames são cadastrados na planilha do Teams. Há uma planilha para cada tipo de exame.
+  2. **Fase Pré-Analítica:** Para sair da recepção, deve ser assinado o protocolo físico, com data e nome do profissional que recebeu as amostras. Na planilha, cada informação subsequente, proveniente da fase pré-analítica, é anotada em campos específicos. Em determinados exames, como o histopatológico, são gerados relatórios dessas fases. A macroscopia, por exemplo, gera um laudo próprio ao seu final, além do laudo final emitido após a microscopia.
+  3. **Fase Analítica:** Receber os relatórios e a análise da peça dos residentes e da preceptoria, na tentativa de fechar o diagnóstico. Na impossibilidade de fechar o diagnóstico, o caso volta à fase pré-analítica (revisão da peça, recorte ou coloração especial, painel ou ampliação de IHQ) ou é enviado para a rede externa terceirizada.
+  4. **Fase Pós-Analítica:** Lançar o laudo no AGHU e arquivá-lo.
 
 ---
 
@@ -51,13 +54,21 @@
 
 > **Objetivo:** Definir com clareza o que a solução digital deve trazer para eliminar a dor do processo atual.
 
-* **A Proposta de Valor:** [O que o sistema faz. *Ex: Centralizar todo o processo em um ambiente web simples, onde os dados já nascem integrados com as bases oficiais, o preenchimento é validado na hora e a tramitação ocorre com um clique.*]
+* **A Proposta de Valor:** *Centralizar o acompanhamento das solicitações e amostras em um único ambiente digital integrado ao AGHU Slave, reaproveitando automaticamente os dados já disponíveis no AGHU e permitindo o registro estruturado das informações específicas do fluxo da Anatomia Patológica. A solução deve possibilitar acompanhar cada caso ao longo das diferentes etapas do processo, desde a recepção da amostra até o processamento, análise, liberação do laudo e arquivamento, reduzindo a dependência de planilhas paralelas e consultas manuais em diferentes telas, considerando os diferentes caminhos que podem ser tomados a depender do exame.*
+
 * **Ganhos Práticos Imediatos:**
-  - Fim do papel e das assinaturas manuais físicas.
-  - Alerta automático de erros ou inconsistências no momento da digitação.
-  - Assinatura eletrônica segura com registro de quem fez, quando aprovou e o que alterou.
-  - Painel de controle em tempo real para a gestão acompanhar entregas e pendências.
-  - Histórico guardado, inviolável e fácil de consultar a qualquer momento.
+  - Visualização centralizada das informações essenciais da solicitação e da amostra, evitando a necessidade de navegar por diferentes telas do AGHU para localizar dados.
+  - Preenchimento automático dos dados já disponíveis no AGHU Slave, reduzindo redigitação e possíveis inconsistências.
+  - Registro estruturado das informações produzidas dentro do SAP e que não estão contempladas adequadamente no AGHU.
+  - Rastreabilidade do caso ao longo das etapas do fluxo, permitindo identificar em que estágio se encontram amostras, blocos, lâminas e demais materiais relacionados.
+  - Redução da dependência de controles manuais e planilhas paralelas.
+  - Padronização dos registros de processamento, como macroscopia, blocos, cassetes, cortes, colorações, IHQ, revisões e demais procedimentos.
+  - Identificação e sinalização de pendências, inconformidades ou informações ausentes durante o processo.
+  - Histórico das movimentações e alterações realizadas em cada caso, com registro de etapa, responsável e data.
+  - Maior facilidade para localizar casos pendentes, atrasados ou que necessitam de processamento complementar.
+  - Apoio ao acompanhamento de materiais enviados para processamento externo, como casos de IHQ realizados em hospital conveniado.
+  - Consolidação de informações que possam apoiar o faturamento e reduzir o risco de procedimentos realizados não serem devidamente registrados.
+  - Disponibilização de informações gerenciais sobre volume de casos, etapas do fluxo, pendências, rejeições e tempos de processamento.
 
 ---
 
@@ -65,54 +76,77 @@
 
 > **Objetivo:** Explicar em linguagem direta como o usuário vai interagir com o sistema, resolvendo a dor do processo manual de ponta a ponta.
 
-* **1. Os dados já vêm prontos:** O usuário não precisa mais recadastrar pessoas, setores ou cargos do zero. Ao abrir a tela, a lista oficial da sua equipe e local de trabalho já está carregada.
-* **2. Preenchimento rápido com travas contra erros:** O responsável digita ou seleciona as informações direto na tela. Se tentar lançar dados conflitantes (ex: duplicidade de horários ou campos obrigatórios em branco), o próprio sistema avisa antes de salvar.
-* **3. Aprovação com um clique:** Concluída a digitação, a chefia confere tudo em uma tela unificada e aprova eletronicamente. O sistema registra automaticamente quem aprovou, data e hora, travando contra alterações indevidas.
-* **4. Informação pronta e disponível:** A gestão acompanha em tempo real um painel mostrando quem já entregou e quem está pendente. A versão oficial homologada fica acessível para consulta imediata de quem tem direito, sem necessidade de procurar papéis ou cobrar por telefone.
+* **1. Os dados já vêm prontos:** O usuário não precisa mais digitar dados do paciente ou da solicitação do zero, nem pular de tela em tela no AGHU para juntar informações. Ao abrir o sistema, os dados essenciais da amostra e da solicitação já vêm preenchidos automaticamente do AGHU Slave. Isso elimina a redigitação, evita inconsistências e centraliza tudo em uma única visualização.
+* **2. Preenchimento rápido com travas contra erros:** O registro das etapas que não existem no AGHU (como macroscopia, blocos, cassetes, cortes, colorações, IHQ e revisões) é feito direto em formulários padronizados no novo ambiente. O sistema identifica e sinaliza ativamente qualquer pendência, inconformidade ou informação ausente, reduzindo a dependência de controles em papel e de planilhas paralelas.
+* **3. Cada movimentação fica registrada:** A cada avanço do material, da recepção ao arquivamento, o sistema registra automaticamente a etapa, a data, a hora e o responsável pela movimentação. Com isso, saber exatamente onde está uma amostra, um bloco ou uma lâmina (inclusive materiais enviados para processamento externo, como IHQ conveniada) vira uma simples consulta na tela, amparada por um histórico de auditoria completo. A pedido do setor, a Ficha de Trabalho impressa e o protocolo físico de recebimento continuam existindo ao lado desse registro.
+* **4. Informação pronta e disponível:** A equipe e a gestão visualizam em painéis atualizados o que está pendente, atrasado ou precisando de complemento. Além de facilitar a rotina de quem está na bancada, o sistema consolida o volume de casos, rejeições e tempos de processamento, reduzindo o risco de que algum procedimento realizado deixe de ser faturado por falta de registro.
+* **5. Exames externos com ponto de partida flexível:** Exames externos podem chegar ao HC em diferentes níveis de evolução. Para eles, o sistema permite indicar por qual etapa o exame começa depois de recebido e marcar as etapas que já foram realizadas fora do HC.
 
 ---
 
 ## 6. Quem Participa do Processo (Atores: Como Faz Hoje vs. Como Fará no Sistema)
 
-| Ator / Perfil no Hospital | O que faz HOJE (Rotina Manual) | O que passará a fazer no NOVO SISTEMA | O que NÃO poderá fazer |
-| :--- | :--- | :--- | :--- |
-| **Área Gestora do Processo** *(Ex: Unidade de Pessoal, Farmácia Central, Regulação)* | Cobra prazos por telefone/e-mail, confere pilhas de papel ou junta dezenas de planilhas dispersas. | Habilita os períodos de trabalho, cadastra regras gerais, publica o resultado final e acompanha o painel geral de pendências em tempo real. | Não preenche dados rotineiros operacionais de setores individuais. |
-| **Profissional do Setor / Executante** *(Quem realiza o atendimento ou rotina na ponta)* | Preenche formulário impresso ou Excel local, correndo risco de esquecer dados ou duplicar lançamentos. | Lança os dados direto no sistema com validações em tempo real e encaminha a sua parte para conferência da chefia. | Não visualiza nem altera dados de setores que não sejam de sua alçada. |
-| **Chefia Imediata / Responsável pelo Setor** *(Ex: Chefia de Unidade ou Setor)* | Confere folhas rubricadas à mão na mesa física, assina no papel e leva as pastas fisicamente. | Visualiza em uma tela única o trabalho da sua equipe, faz ajustes rápidos e aprova eletronicamente com um clique. | Não pode enviar lotes parciais ou com pendências em aberto. |
-| **Gestão / Coordenação Superior** *(Ex: Chefia de Divisão ou Gerência* | Não tem visão em tempo real das entregas; depende de relatórios manuais solicitados e demorados. | Acompanha indicadores gerais em tempo real (painel executivo com taxas de cumprimento de prazos e pendências). | Acesso estritamente para visualização gerencial (não edita registros operacionais). |
-| **Público / Usuário do Serviço** *(Colaboradores do hospital, pacientes ou cidadãos)* | Precisa ligar, mandar e-mail ou ir presencialmente ao setor para obter uma informação ou comprovante. | Consulta com agilidade pelo portal, pesquisando por nome ou setor, com rapidez e transparência garantida. | Não tem acesso a dados restritos ou confidenciais. |
+| Ator / Perfil no Hospital   | O que faz HOJE (Rotina Manual)                                                                                                                | O que passará a fazer no NOVO SISTEMA                                                                                                     | O que NÃO poderá fazer                                                    |
+| :-------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------ |
+| **Recepção**                | Cadastrar manualmente as amostras recebidas na planilha e anexar o identificador interno em cada peça.                                        | Revisão de cadastramento das amostras e anexo da etiqueta com identificador interno impresso em cada peça.                                | Alterar dados sensíveis de identificação do exame.                        |
+| **Laboratório / Técnicos**  | Criam relatório impresso e planilha do Teams, correndo risco de esquecer dados ou duplicar lançamentos. Realizam fase pré-analítica.          | Lançam os dados direto no sistema com validações em tempo real e encaminham relatórios pré-processados para conferência da chefia.        | Alterar dados de setores que não sejam de sua alçada.                     |
+| **Residentes**              | Preenchimento de pré-laudo após análise da peça no AGHU e Teams.                                                                              | Preenchem em uma tela única o pré-laudo após análise, pronto para ser enviado ao preceptor.                                               | Alterar dados de setores que não sejam de sua alçada.                     |
+| **Validação / Preceptoria** | Revisar o pré-laudo e escrever o diagnóstico, enviando os resultados pelo AGHU. Pode solicitar processamentos adicionais ao laboratório.      | Revisar o pré-laudo e escrever o diagnóstico, enviando os resultados pelo AGHU. Pode solicitar processamentos adicionais direto do sistema, que ficam vinculados ao caso. | Alterar dados de setores que não sejam de sua alçada.                     |
+| **Técnico Administrativo (Chefia do UACAP)** | Acompanhar o andamento do setor sem uma visão consolidada, dependendo de planilhas e de informações repassadas pelas equipes.                 | Acompanhar painéis de pendências, atrasos, rejeições, volume de casos e tempos de processamento, e responder pelas decisões da seção 9.   | Apagar ou sobrescrever o histórico de registros feitos pelas equipes.     |
+
+> **Nota sobre nomes:** "Recepção / Triagem" é o nome da primeira **etapa** do fluxo. O perfil de quem faz o pré-laudo chama-se apenas **Residentes**, para não confundir os dois.
+
+**Outros participantes do processo:**
+- **Regulação do hospital:** cadastra no AGHU os pacientes de exames externos, a partir dos dados enviados pela Anatomia Patológica.
+- **Bloco Cirúrgico:** solicita exames no AGHU, envia peças e líquidos ao setor e recebe da equipe a resposta da Congelação.
+
+A forma como esses dois participantes vão interagir com o SAP ainda não foi definida.
 
 ---
 
 ## 7. Regras de Negócio Inegociáveis (RNs)
 
-* **RN-01 (Identificação Funcional Única):** O profissional é identificado exclusivamente pela sua matrícula funcional (SIAPE). Para preservar a privacidade e evitar riscos de vazamento, dados pessoais sensíveis desnecessários (como CPF) não são coletados nem expostos no sistema.
-* **RN-02 (Prevenção de Duplicidade e Choques):** O sistema impede e bloqueia que a mesma pessoa seja alocada em dois setores, turnos ou atendimentos conflitantes no mesmo horário, eliminando de raiz o risco das planilhas paralelas manuais.
-* **RN-03 (Preservação e Imutabilidade do Histórico):** O fechamento de um período ou a abertura de um novo ciclo nunca apaga, altera ou sobrescreve informações passadas. Registros homologados tornam-se imutáveis para garantir respaldo em auditorias e consultas futuras.
-* **RN-04 (Homologação em Bloco / Entrega Completa):** A chefia de unidade só pode homologar e encaminhar para a gestão central o lote 100% completo de todos os seus setores subordinados. O sistema bloqueia entregas parciais ou com pendências não resolvidas.
-* **RN-05 (Autenticação Institucional Obrigatória):** O acesso interno para preenchimento, conferência e aprovação exige login institucional com a conta de rede do hospital, vinculando a autoria e data/hora de cada ação realizada.
-* **RN-06 (Transparência Ativa com Privacidade):** Na consulta pública ou da equipe, o sistema exibe apenas o nome completo, identificação funcional e a informação oficial aprovada, garantindo publicidade dos atos administrativos em conformidade com as diretrizes de privacidade.
+> Sete regras que o sistema deve cumprir sempre. Elas reúnem, sem perder conteúdo, as 14 regras da versão anterior.
+
+- **RN-01 (Fonte Oficial do AGHU e Separação dos Dados):** as informações já disponíveis no AGHU devem ser obtidas automaticamente por meio da base institucional disponibilizada pelo HC-UFPE, evitando a redigitação desnecessária de dados clínicos e administrativos. O sistema não deve manter cópias manuais divergentes dessas informações quando a fonte oficial estiver disponível. Os dados originados no AGHU são tratados como dados da fonte institucional; os dados gerados durante o processamento da Anatomia Patológica são armazenados e mantidos pelo SAP. O sistema deve deixar clara essa distinção e manter a vinculação entre ambos.
+- **RN-02 (Vínculo e Rastreabilidade de Amostras e Materiais):** toda amostra processada deve estar obrigatoriamente vinculada à solicitação e aos identificadores correspondentes no AGHU; o sistema não deve permitir a criação ou o processamento de registros sem que seja possível determinar, sem possibilidade de erro, a qual solicitação e amostra eles pertencem. Os materiais derivados (peças, cassetes, blocos, lâminas e outros) devem permanecer rastreáveis até o caso de origem durante todo o processo. Procedimentos complementares (recortes, novas colorações, IHQ, revisão) e encaminhamentos externos devem permanecer associados ao caso original e não podem gerar registros isolados. Nos encaminhamentos externos, devem constar envio, finalidade, situação e retorno do material ou resultado.
+- **RN-03 (Progressão Controlada do Fluxo e Status Confiável):** uma etapa só pode ser registrada como concluída quando as informações obrigatórias tiverem sido preenchidas; pendências, inconformidades ou ausência de dados essenciais devem impedir ou sinalizar o avanço indevido do caso, evitando retrabalho. O status exibido deve ser derivado ou validado a partir das etapas efetivamente registradas: um caso não pode aparecer como concluído, liberado ou arquivado enquanto existirem etapas obrigatórias ou pendências incompatíveis com esse estado (por exemplo: informação crítica não preenchida, etapa ignorada ou alteração pendente).
+- **RN-04 (Histórico, Autoria e Auditoria):** registros anteriores não devem ser apagados nem sobrescritos de forma a eliminar o histórico do caso; toda alteração relevante preserva a informação anterior e a nova, permitindo reconstruir a trajetória do material e das decisões. Toda ação relevante deve estar associada ao usuário autenticado, com data/hora, ação executada e recurso afetado, e a etapa executada ou concluída deve identificar o profissional responsável. As alterações de dados clínicos ou operacionais devem ter trilha de auditoria conforme o padrão institucional do HC-UFPE, informado pelo líder técnico do SETISD (Daniel Turmina).
+- **RN-05 (Autenticação Institucional e Controle de Acesso):** o acesso ao sistema deve ocorrer por autenticação institucional, utilizando os mecanismos previstos pelo framework do HC-UFPE disponível no repositório. As funcionalidades de cada usuário devem respeitar os perfis e permissões definidos pelo controle de acesso institucional.
+- **RN-06 (Registro de Inconformidades e Rejeições):** amostras com divergências, ausência de informações, condicionamento inadequado ou outras inconformidades não podem ser tratadas como casos regulares sem que a ocorrência seja registrada. O sistema deve manter o motivo, a situação e a resolução da inconformidade vinculados ao caso.
+- **RN-07 (Registro de Procedimentos Relevantes ao Faturamento):** procedimentos realizados ao longo do fluxo que tenham impacto administrativo ou de faturamento devem ser registrados de forma estruturada, evitando que sua contabilização dependa exclusivamente de anotações manuais ou controles paralelos.
 
 ---
 
 ## 8. Painel de Gestão e Indicadores Estratégicos (KPIs)
 
-O sistema deve disponibilizar painel gerencial hierárquico (cada chefia enxerga o seu escopo) com os seguintes indicadores de negócio:
-1. **Taxa de Cumprimento de Prazos:** Acompanhamento percentual e quantitativo em tempo real de quais setores e unidades já concluíram suas entregas dentro do calendário oficial, eliminando a necessidade de cobranças manuais por telefone.
-2. **Mapa de Pendências e Atrasos:** Listagem imediata de unidades ou setores que ainda estão com preenchimento aberto, rascunho pendente ou com prazo vencido, permitindo atuação pontual da liderança.
-3. **Detecção de Inconsistências:** Alerta visual automático para profissionais ativos que não possuem alocação ou registro no ciclo vigente, evitando esquecimentos ou desvios de planejamento.
+| Indicador | O que mede |
+| :--- | :--- |
+| **Turnaround time** | Tempo total entre a recepção da amostra e a emissão do laudo conclusivo. |
+| **Erro de transposição** | Divergências entre o dado de origem e o dado registrado. |
+| **Taxa de cumprimento de prazos** | Proporção de casos concluídos dentro do prazo de referência de cada tipo de exame. |
+| **Mapa de pendências e atrasos** | Casos pendentes, atrasados ou aguardando processamento complementar, por etapa. |
+| **Automação do preenchimento** | Proporção de dados que chegam do AGHU sem digitação manual. |
+| **Rastreabilidade (status das amostras)** | Etapa atual de cada amostra, bloco e lâmina. |
+| **Monitoramento de inconsistências** | Inconformidades e rejeições registradas, com motivo e situação de resolução. |
 
 ---
 
-## 9. Matriz de Pontos de Decisão (Gabinete / Gestão do Negócio)
+## 9. Matriz de Pontos de Decisão (Chefia do UACAP / Gestão do Negócio)
 
-> *Itens que dependem de confirmação dos gestores do hospital antes da conclusão:*
+> **Como ler esta matriz:** cada linha é uma pergunta que o sistema não consegue responder sozinho e que a equipe de TI não deve decidir no lugar do hospital. A coluna "Por que precisa ser decidido" explica o que muda no sistema conforme a resposta; "Opções em discussão" traz caminhos possíveis para facilitar a conversa, e não decisões já tomadas. Quando houver resposta, o status muda para 🟢 Decidido, com a data e a definição registradas na própria linha.
 
-| # | Ponto a Decidir | Impacto no Processo | Quem deve decidir? | Status / Definição |
-| :-: | :--- | :--- | :--- | :--- |
-| **1** | **Data Limite Oficial:** Até qual dia do período os setores devem fechar o preenchimento e assinar? | Define a regra do sistema para disparar alertas preventivos e travar edições intempestivas. | Gestão Central / Chefias | 🟡 Em definição |
-| **2** | **Substituição de Chefia:** Qual o critério para assinatura quando a chefia titular estiver de férias ou afastada? | Evita o travamento da homologação em bloco da unidade inteira por ausência de um único responsável. | Gestão da Área | 🟡 Em definição |
-| **3** | **Retificação pós-Homologação:** Qual é o rito formal para reabrir e corrigir dados já aprovados oficialmente? | Define se haverá solicitação formal de reabertura com justificativa gravada ou ajuste restrito à gestão central. | Gestão Central | 🟡 Em definição |
+| # | Ponto a decidir | Por que precisa ser decidido (o que muda no sistema) | Opções em discussão | Quem deve decidir? | Status / Definição |
+| :-: | :--- | :--- | :--- | :--- | :--- |
+| **1** | **Tipos de exame da primeira versão:** quais tipos de exame entram na primeira entrega do sistema? | Hoje há uma planilha por tipo de exame e cada tipo começa em uma fase diferente. O sistema precisa de um fluxo para cada tipo, então quanto mais tipos na primeira versão, maior e mais demorada a entrega. | Começar por um ou dois tipos (por exemplo, histopatológico) e ampliar depois; ou entregar todos os tipos de uma vez. | Chefia do UACAP | 🟡 Em definição |
+| **2** | **Prazos de referência:** qual o prazo esperado para cada tipo de exame (e, se necessário, para cada etapa)? | Define o que o sistema considera "atrasado", quando dispara alertas e como é calculada a taxa de cumprimento de prazos. Sem prazo definido, o painel não consegue apontar atrasos. | Um prazo único para todos os exames; um prazo por tipo de exame; prazos por etapa do fluxo. | Chefia do UACAP, com Preceptoria | 🟡 Em definição |
+| **3** | **Retorno à fase pré-analítica:** quando o diagnóstico não fecha, quem decide que o caso volta e o que precisa ser informado? | O sistema precisa saber se o retorno exige motivo obrigatório e quem pode pedi-lo. O caso volta a uma etapa anterior sem apagar o histórico do que já foi feito (RN-04). | O profissional responsável pela etapa em que o caso está define o encaminhamento ou retorno (é o que diz o feedback do fluxo atual; falta confirmar quem é esse responsável na Microscopia); apenas a Preceptoria pode devolver o caso, com motivo obrigatório; ou Residentes também podem sugerir o retorno, com confirmação da Preceptoria. | Preceptoria e Chefia do UACAP | 🟡 Em definição |
+| **4** | **Pedido de processamentos adicionais:** o que a Preceptoria pode pedir pelo sistema (novos cortes, colorações, IHQ, revisão), para quem o pedido vai e se precisa de aprovação? | Define o formulário de pedido, quem recebe o aviso e se o pedido entra direto na fila do laboratório. Todo pedido fica vinculado ao caso original (RN-02). | Pedido direto da Preceptoria para o Laboratório; ou pedido com aprovação prévia da Chefia. | Preceptoria e Chefia do UACAP | 🟡 Em definição |
+| **5** | **Correção após laudo liberado:** qual o rito para corrigir ou reabrir um laudo ou dado já concluído? | Define se haverá reabertura formal, com justificativa gravada e laudo anterior preservado (RN-04), e quem tem permissão para fazê-la. Também precisa considerar que o laudo já foi lançado no AGHU. | Reabertura apenas pela Chefia, com justificativa obrigatória; ou pelo Preceptor responsável, com justificativa e aviso à Chefia. | Chefia do UACAP, com apoio do SETISD no que envolver o AGHU | 🟡 Em definição |
+| **6** | **Substituição na ausência:** quem valida o laudo e responde pelas decisões quando o preceptor ou a chefia titular estiver de férias ou afastado? | Evita que casos fiquem parados por ausência de uma única pessoa. Define quem recebe as permissões de validação temporariamente. | Lista fixa de substitutos cadastrados; ou delegação temporária registrada pela própria Chefia. | Chefia do UACAP | 🟡 Em definição |
+| **7** | **IHQ em hospital conveniado:** o que deve ser registrado no envio e no retorno do material, e quem confirma o recebimento? | Define os campos do encaminhamento externo (envio, finalidade, situação e retorno, conforme RN-02), o prazo esperado de retorno e o alerta para material que não voltou. | Registro feito pelo Laboratório no envio e no retorno; ou envio pelo Laboratório e confirmação de retorno pela Preceptoria. | Chefia do UACAP e Laboratório | 🟡 Em definição |
+| **8** | **Procedimentos que contam para o faturamento:** quais procedimentos realizados no fluxo têm impacto no faturamento? | O sistema só consegue registrar de forma estruturada (RN-07) o que estiver numa lista definida. Sem essa lista, o risco de procedimento não faturado continua. | Lista fornecida pela Chefia, validada com a área de faturamento do hospital. | Chefia do UACAP, com a área de faturamento do HC-UFPE | 🟡 Em definição |
+| **9** | **Transição das planilhas:** por quanto tempo planilhas e sistema funcionam em paralelo, e o que acontece com o histórico das planilhas do Teams? | Define a data de início do uso oficial do SAP, se o histórico antigo será levado para o sistema ou apenas consultado nas planilhas, e quando as planilhas deixam de ser atualizadas. | Período curto de uso paralelo com data de corte; ou virada direta por tipo de exame. Histórico: migrar, ou manter planilhas apenas para consulta. | Chefia do UACAP e SETISD | 🟡 Em definição |
 
 ---
 ---
@@ -152,13 +186,13 @@ FASE 2         │            ARTEFATOS DE ESPECIFICAÇÃO TÉCNICA           �
 
 | Seção deste Documento de Negócio | O que ela entrega para a documentação técnica? | Arquivo de Destino |
 | :--- | :--- | :--- |
-| **Seção 2 (O Problema que Queremos Resolver)** | Define a motivação institucional, os riscos do modelo atual e a justificativa do projeto. | [01-visao.md](01-visao.md) *(Problema e Escopo)* |
-| **Seção 3 (Como o Processo Funciona Hoje)** | Serve de base para mapear os processos manuais que serão substituídos e os dados legados. | [01-visao.md](01-visao.md) *(Cenário Atual)* |
-| **Seção 4 (O Que a Nova Solução Deve Entregar)** | Define os objetivos do produto e os ganhos práticos que orientam a entrega de valor. | [01-visao.md](01-visao.md) *(Visão de Futuro)* |
+| **Seção 2 (O Problema que Queremos Resolver)** | Define a motivação institucional, os riscos do modelo atual e a justificativa do projeto. | [01-visao.md](01-visao.md) *(Problema e Oportunidade)* |
+| **Seção 3 (Como o Processo Funciona Hoje)** | Serve de base para mapear os processos manuais que serão substituídos e os dados legados. | [01-visao.md](01-visao.md) *(Problema e Oportunidade)* |
+| **Seção 4 (O Que a Nova Solução Deve Entregar)** | Define o escopo do produto e os ganhos práticos que orientam a entrega de valor. | [01-visao.md](01-visao.md) *(Escopo do Produto)* |
 | **Seção 5 (Como Será o Trabalho no Novo Sistema)** | Detalha as etapas práticas do usuário na tela, que viram os fluxos e cenários de uso do sistema. | [02-requisitos.md](02-requisitos.md) e [03-casos-uso.md](03-casos-uso.md) *(Casos de Uso e Fluxos)* |
 | **Seção 6 (Quem Participa do Processo)** | Define os perfis de acesso, permissões de cada papel e o modelo de autorização local. | [02-requisitos.md](02-requisitos.md) e [03-casos-uso.md](03-casos-uso.md) *(Atores e RBAC)* |
-| **Seção 7 (Regras de Negócio Inegociáveis)** | É convertida diretamente em requisitos funcionais estritos e validações de backend. | [02-requisitos.md](02-requisitos.md) *(Requisitos Funcionais - RFs)* |
-| **Seção 8 (Painel de Gestão e Indicadores)** | Dá origem às consultas analíticas de acompanhamento, relatórios e telas gerenciais. | [05-interfaces.md](05-interfaces.md) *(Protótipos e Dashboards)* |
+| **Seção 7 (Regras de Negócio Inegociáveis)** | As 7 regras são convertidas diretamente em requisitos funcionais estritos e validações de backend. | [02-requisitos.md](02-requisitos.md) *(Requisitos Funcionais - RFs)* |
+| **Seção 8 (Painel de Gestão e Indicadores)** | Dá origem às consultas analíticas de acompanhamento, relatórios e telas gerenciais, e fornece os indicadores das metas de negócio. | [01-visao.md](01-visao.md) *(Metas e Objetivos de Negócio)* e [05-interfaces.md](05-interfaces.md) *(Protótipos e Dashboards)* |
 | **Seção 9 (Matriz de Pontos de Decisão)** | Orienta os parâmetros de configuração e regras que alimentam as tarefas de implementação. | [SPEC.md](SPEC.md) *(Definições e Tarefas)* |
 
 ---
