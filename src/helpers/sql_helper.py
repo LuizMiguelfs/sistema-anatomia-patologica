@@ -4,7 +4,7 @@ def read_sql_file(file_path: str) -> str:
     """
     Reads the content of a SQL file.
     """
-    with open(file_path, 'r') as f:
+    with open(file_path, 'r', encoding='utf-8') as f:
         return f.read()
 
 def create_query(sql_content: str, params: dict) -> str:
