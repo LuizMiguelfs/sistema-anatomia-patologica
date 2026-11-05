@@ -25,10 +25,18 @@ class Settings:
     ]
 
     # 2. Provedores e Bancos de Dados
-    PACIENTE_PROVIDER_TYPE: str = os.getenv("PACIENTE_PROVIDER_TYPE", "POSTGRES").upper()
     APP_DB_URL: str = os.getenv("APP_DB_URL", "sqlite+aiosqlite:///data/app.db")
     POSTGRES_DSN: str = os.getenv("POSTGRES_DSN", "")
     ORACLE_DSN: str = os.getenv("ORACLE_DSN", "")
+    # Fonte de dados do módulo de Pacientes (POSTGRES ou CSV).
+    # Sem valor explícito: POSTGRES quando houver POSTGRES_DSN, senão CSV (desenvolvimento offline).
+    PACIENTE_PROVIDER_TYPE: str = (
+        os.getenv("PACIENTE_PROVIDER_TYPE") or ("POSTGRES" if POSTGRES_DSN else "CSV")
+    ).upper()
+    PACIENTE_CSV_PATH: str = os.getenv("PACIENTE_CSV_PATH", "data/pacientes.csv")
+    # O AGHU é somente leitura (RNF005). A escrita via provider Postgres só é executada
+    # quando esta flag for explicitamente "true" (ex.: banco Postgres de desenvolvimento).
+    PACIENTE_POSTGRES_ESCRITA: bool = os.getenv("PACIENTE_POSTGRES_ESCRITA", "false").strip().lower() in ("1", "true", "sim", "yes")
 
     # 3. Active Directory (LDAP)
     AD_URL: str = os.getenv("AD_URL", "")
@@ -49,6 +57,11 @@ class Settings:
                 logger.error(
                     "❌ ERRO CRÍTICO DE SEGURANÇA: A variável 'JWT_SECRET' está usando a chave padrão. "
                     "Altere para uma chave secreta aleatória forte no arquivo .env antes de rodar em produção!"
+                )
+            if cls.PACIENTE_POSTGRES_ESCRITA:
+                logger.warning(
+                    "⚠️ AVISO: 'PACIENTE_POSTGRES_ESCRITA' está habilitada em produção. "
+                    "O AGHU deve ser acessado somente em modo leitura (RNF005)."
                 )
             if not cls.AD_URL:
                 logger.warning(
