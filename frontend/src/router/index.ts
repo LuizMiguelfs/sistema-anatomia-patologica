@@ -12,6 +12,7 @@ const routes = [
     path: '/',
     name: 'Início',
     component: Home,
+    meta: { requiresAuth: true },
   },
   {
     path: '/login',
