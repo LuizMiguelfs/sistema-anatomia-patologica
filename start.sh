@@ -11,9 +11,9 @@ echo -e "${BLUE}==================================================${NC}"
 echo -e "${BLUE}   🚀 Iniciando Aplicação                         ${NC}"
 echo -e "${BLUE}==================================================${NC}"
 
-# 0. Limpeza de processos anteriores
-echo -e "${YELLOW}🧹 Limpando processos anteriores...${NC}"
-pkill -f "uvicorn src.main:app" || true
+# 0. Processos anteriores (não são finalizados pelo script)
+echo -e "${YELLOW}ℹ️  Processos já em execução não são finalizados automaticamente.${NC}"
+echo "Se a porta estiver ocupada, encerre o processo anterior manualmente."
 
 # 1. Verificação das ferramentas necessárias
 echo -e "\n${YELLOW}[1/6] Verificando ferramentas do sistema...${NC}"
@@ -43,11 +43,19 @@ else
     exit 1
 fi
 
+# Migrações do banco local (tabelas, triggers e dados de configuração, como os fluxos por exame)
+if uv run alembic upgrade head; then
+    echo -e "  ✅ Banco local atualizado (alembic upgrade head)."
+else
+    echo -e "${RED}❌ Erro ao aplicar as migrações do banco local. Faça backup de data/app.db e verifique.${NC}"
+    exit 1
+fi
+
 # 4. Instalação das dependências do frontend
 echo -e "\n${YELLOW}[4/6] Verificando dependências do frontend...${NC}"
 if [ -d "frontend" ]; then
     cd frontend
-    if npm install; then
+    if npm ci; then
         echo -e "  ✅ Dependências do frontend instaladas."
     else
         echo -e "${RED}❌ Erro ao instalar dependências do frontend.${NC}"

@@ -1,4 +1,5 @@
 # src/routers/health.py
+import logging
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
@@ -7,13 +8,23 @@ from sqlalchemy import text
 from ..version import VERSION, APP_NAME, SYSTEM_TITLE, ORGANIZATION, DEPARTMENT
 
 router = APIRouter(prefix="/api", tags=["Health & Monitoring"])
+logger = logging.getLogger("health")
+
+
+def _registrar_falha(banco: str, erro: Exception) -> str:
+    """
+    Rota pública: a resposta nunca inclui a mensagem do erro, que pode conter DSN,
+    usuário ou host do banco (RNF007). O tipo do erro fica apenas no log do servidor.
+    """
+    logger.warning("Health check: falha ao conectar em %s (%s)", banco, erro.__class__.__name__)
+    return "error"
 
 @router.get(
     "/health", 
     summary="Health Check Endpoint", 
     description="Verifica a saúde do servidor FastAPI, versão e conexões ativas com os bancos de dados."
 )
-async def health_check(request: Request):
+async def health_check(request: Request) -> JSONResponse:
     """
     Retorna o estado de saúde da aplicação, versão e verifica conexões ativas de banco de dados.
     """
@@ -30,7 +41,7 @@ async def health_check(request: Request):
             db_status["app_db"] = "not_initialized"
             is_healthy = False
     except Exception as e:
-        db_status["app_db"] = f"error: {str(e)}"
+        db_status["app_db"] = _registrar_falha("app_db", e)
         is_healthy = False
 
     # 2. Checar banco AGHU (PostgreSQL, se configurado)
@@ -40,7 +51,7 @@ async def health_check(request: Request):
                 await session.execute(text("SELECT 1"))
             db_status["aghu_postgres"] = "connected"
         except Exception as e:
-            db_status["aghu_postgres"] = f"error: {str(e)}"
+            db_status["aghu_postgres"] = _registrar_falha("aghu_postgres", e)
     else:
         db_status["aghu_postgres"] = "disabled_or_not_configured"
 

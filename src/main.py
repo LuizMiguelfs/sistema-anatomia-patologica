@@ -1,22 +1,23 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, Response
 import os
+from typing import AsyncIterator, Awaitable, Callable, Dict, Union
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-
-from .routers import caso
-app.include_router(caso.router)
 
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
 
 from .resources.database import DatabaseManager, Base
+# Importa o modelo de auditoria para registrá-lo no metadata (create_all) e a proteção de imutabilidade.
+from .models.audit_log import instalar_protecao_auditoria
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Startup
+    """Ciclo de vida: abre os bancos (AGHU e local), cria tabelas e triggers de auditoria; fecha os pools ao encerrar."""
     print("Starting up...")
 
     # Initialize AGHU DB Manager and store in app.state
@@ -36,6 +37,8 @@ async def lifespan(app: FastAPI):
     # Create tables for App DB (if they don't exist) - for development only, Alembic handles this in production
     async with app.state.app_db.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Triggers que impedem UPDATE/DELETE em audit_logs (idempotente; vale para bancos já existentes).
+        await conn.run_sync(instalar_protecao_auditoria)
     print("App SQLite tables checked/created.")
 
     yield
@@ -73,7 +76,8 @@ app.add_middleware(
 
 # Middleware de Cabeçalhos de Segurança HTTP (Security Headers)
 @app.middleware("http")
-async def add_security_headers(request: Request, call_next):
+async def add_security_headers(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    """Acrescenta os cabeçalhos de segurança HTTP obrigatórios a todas as respostas."""
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -87,7 +91,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Padroniza erros de validação no formato {"detail": "..."} com status 400."""
     errors = exc.errors()
     if errors:
         first_err = errors[0]
@@ -112,14 +117,18 @@ if os.path.exists(assets_dir):
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Roteadores da API
-from .routers import paciente, auth, admin, health
+from .routers import paciente, auth, admin, health, dashboard, auditoria, usuarios, caso
 app.include_router(health.router)
 app.include_router(paciente.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(dashboard.router)
+app.include_router(auditoria.router)
+app.include_router(usuarios.router)
+app.include_router(caso.router)
 
-@app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
+@app.get("/{full_path:path}", response_model=None)
+async def serve_frontend(full_path: str) -> Union[FileResponse, Dict[str, str]]:
     """
     Serve o arquivo index.html para todas as rotas que não são da API ou arquivos estáticos.
     Isso é necessário para que o roteamento do Vue (SPA) funcione.

@@ -1,8 +1,8 @@
-import os
 from typing import Callable
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .config import settings
 from .providers.interfaces.paciente_provider_interface import PacienteProviderInterface
 from .providers.implementations.paciente_postgres_provider import PacientePostgresProvider
 from .providers.implementations.paciente_csv_provider import PacienteCsvProvider
@@ -31,11 +31,12 @@ def get_aghu_solicitacao_provider(
 def _get_paciente_postgres_provider(
     session: AsyncSession = Depends(get_aghu_db_session)
 ) -> PacienteProviderInterface:
-    return PacientePostgresProvider(session=session)
+    """Provedor AGHU (Postgres). Escrita só com PACIENTE_POSTGRES_ESCRITA=true (RNF005)."""
+    return PacientePostgresProvider(session=session, escrita_habilitada=settings.PACIENTE_POSTGRES_ESCRITA)
 
 def _get_paciente_csv_provider() -> PacienteProviderInterface:
-    csv_path = os.getenv("PACIENTE_CSV_PATH", "data/pacientes.csv")
-    return PacienteCsvProvider(csv_path=csv_path)
+    """Provedor CSV para desenvolvimento offline (caminho em PACIENTE_CSV_PATH)."""
+    return PacienteCsvProvider(csv_path=settings.PACIENTE_CSV_PATH)
 
 # 2. A FÁBRICA: A única função que o roteador vai conhecer.
 def get_paciente_provider(strategy: str) -> Callable[..., PacienteProviderInterface]:
@@ -49,3 +50,38 @@ def get_paciente_provider(strategy: str) -> Callable[..., PacienteProviderInterf
         return _get_paciente_csv_provider
     else:
         raise ValueError(f"Estratégia de provedor desconhecida: {strategy}")
+
+
+# 3. Auditoria: leitura da trilha `audit_logs` no banco local da aplicação (app.db).
+from .providers.interfaces.auditoria_provider_interface import AuditoriaProviderInterface
+from .providers.implementations.auditoria_sqlite_provider import AuditoriaSqliteProvider
+from .resources.database import get_app_db_session
+
+
+def get_auditoria_provider(
+    session: AsyncSession = Depends(get_app_db_session)
+) -> AuditoriaProviderInterface:
+    """Provedor de leitura da trilha de auditoria (banco local da aplicação)."""
+    return AuditoriaSqliteProvider(session=session)
+
+
+# 4. Gestão de usuários: usuários autorizados (`authorized_users`) no banco local da aplicação.
+from .providers.interfaces.usuario_provider_interface import UsuarioProviderInterface
+from .providers.implementations.usuario_sqlite_provider import UsuarioSqliteProvider
+
+
+def get_usuario_provider(
+    session: AsyncSession = Depends(get_app_db_session)
+) -> UsuarioProviderInterface:
+    """Provedor dos usuários autorizados (banco local da aplicação)."""
+    return UsuarioSqliteProvider(session=session)
+
+
+# 5. Painel de indicadores: por enquanto só o provedor demonstrativo.
+from .providers.interfaces.dashboard_provider_interface import DashboardProviderInterface
+from .providers.implementations.dashboard_demo_provider import DashboardDemoProvider
+
+
+def get_dashboard_provider() -> DashboardProviderInterface:
+    """Provedor do painel de indicadores (demonstrativo até haver fonte real)."""
+    return DashboardDemoProvider()

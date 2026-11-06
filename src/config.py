@@ -1,63 +1,66 @@
-"""
-Módulo Centralizado de Configurações e Validação de Segredos (Settings)
-=======================================================================
-Garante o Padrão de Governança de Variáveis de Ambiente (Env Vars & Secrets) do HC-UFPE.
-Carrega o arquivo .env e valida se os parâmetros essenciais e chaves de segurança estão corretos.
-"""
-
+"""Configuração central. Falha imediatamente se produção não for segura."""
 import os
-import logging
-from typing import List
+from urllib.parse import urlparse
 from dotenv import load_dotenv
+
+from .helpers.crypto_helper import validar_chave
 
 load_dotenv()
 
-logger = logging.getLogger("config")
-
 
 class Settings:
-    # 1. Configurações do Servidor
-    ENV: str = os.getenv("ENV", "development").lower()
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "info").lower()
-    RAW_ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
-    ALLOWED_ORIGINS: List[str] = [
-        origin.strip() for origin in RAW_ALLOWED_ORIGINS.split(",") if origin.strip()
-    ]
+    ENV = os.getenv("ENV", "development").lower()
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "info").lower()
+    RAW_ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
+    ALLOWED_ORIGINS = [x.strip() for x in RAW_ALLOWED_ORIGINS.split(",") if x.strip()]
 
-    # 2. Provedores e Bancos de Dados
-    PACIENTE_PROVIDER_TYPE: str = os.getenv("PACIENTE_PROVIDER_TYPE", "POSTGRES").upper()
-    APP_DB_URL: str = os.getenv("APP_DB_URL", "sqlite+aiosqlite:///data/app.db")
-    POSTGRES_DSN: str = os.getenv("POSTGRES_DSN", "")
-    ORACLE_DSN: str = os.getenv("ORACLE_DSN", "")
-
-    # 3. Active Directory (LDAP)
-    AD_URL: str = os.getenv("AD_URL", "")
-    AD_BASEDN: str = os.getenv("AD_BASEDN", "DC=ebserhnet,DC=gov,DC=br")
-    AD_BIND_USER: str = os.getenv("AD_BIND_USER", "")
-    AD_BIND_PASSWORD: str = os.getenv("AD_BIND_PASSWORD", "")
-
-    # 4. Segurança e Criptografia (JWT)
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "super-secret-key-change-in-production")
-    JWT_EXP_HOURS: int = int(os.getenv("JWT_EXP_HOURS", "24"))
-    REFRESH_TOKEN_EXP_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXP_DAYS", "30"))
+    APP_DB_URL = os.getenv("APP_DB_URL", "sqlite+aiosqlite:///data/app.db")
+    POSTGRES_DSN = os.getenv("POSTGRES_DSN", "")
+    # PR 1: pacientes. Usa CSV se POSTGRES_DSN nao estiver configurado.
+    PACIENTE_PROVIDER_TYPE = (
+        os.getenv("PACIENTE_PROVIDER_TYPE", "").strip()
+        or ("POSTGRES" if POSTGRES_DSN else "CSV")
+    ).upper()
+    PACIENTE_CSV_PATH = os.getenv("PACIENTE_CSV_PATH", "data/pacientes.csv")
+    # AGHU em somente-leitura, salvo habilitacao explicita.
+    PACIENTE_POSTGRES_ESCRITA = (
+        os.getenv("PACIENTE_POSTGRES_ESCRITA", "false").strip().lower()
+        in {"1", "true", "sim", "yes"}
+    )
+    ORACLE_DSN = os.getenv("ORACLE_DSN", "")
+    AD_URL = os.getenv("AD_URL", "")
+    AD_BASEDN = os.getenv("AD_BASEDN", "DC=ebserhnet,DC=gov,DC=br")
+    AD_BIND_USER = os.getenv("AD_BIND_USER", "")
+    AD_BIND_PASSWORD = os.getenv("AD_BIND_PASSWORD", "")
+    JWT_SECRET = os.getenv("JWT_SECRET", "")
+    JWT_EXP_HOURS = int(os.getenv("JWT_EXP_HOURS", "24"))  # compatibilidade
+    ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "15"))
+    REFRESH_TOKEN_EXP_DAYS = int(os.getenv("REFRESH_TOKEN_EXP_DAYS", "30"))
+    SESSION_REFRESH_HOURS = int(os.getenv("SESSION_REFRESH_HOURS", "12"))
+    # Chave AES-256 dos dados sensíveis gravados pelo SAP (32 bytes em base64).
+    SAP_DATA_KEY = os.getenv("SAP_DATA_KEY", "")
 
     @classmethod
-    def validate_config(cls):
-        """Valida a integridade das configurações e dispara avisos de segurança."""
+    def validate_config(cls) -> None:
+        """Valida as variáveis de ambiente na inicialização; falha imediatamente se a configuração for insegura."""
+        if cls.ENV not in {"development", "testing", "test", "production"}:
+            raise RuntimeError("ENV deve ser development, testing ou production")
+        if cls.ACCESS_TOKEN_MINUTES < 1 or cls.REFRESH_TOKEN_EXP_DAYS < 1 or cls.SESSION_REFRESH_HOURS < 1:
+            raise RuntimeError("Configuração de validade de tokens inválida")
+        if len(cls.JWT_SECRET) < 32:
+            raise RuntimeError("JWT_SECRET deve ter pelo menos 32 caracteres")
+        validar_chave(cls.SAP_DATA_KEY)  # AES-256 obrigatório em todos os ambientes (SPEC.md)
         if cls.ENV == "production":
-            if "change-in-production" in cls.JWT_SECRET or "SUA_CHAVE_SECRETA" in cls.JWT_SECRET:
-                logger.error(
-                    "❌ ERRO CRÍTICO DE SEGURANÇA: A variável 'JWT_SECRET' está usando a chave padrão. "
-                    "Altere para uma chave secreta aleatória forte no arquivo .env antes de rodar em produção!"
-                )
-            if not cls.AD_URL:
-                logger.warning(
-                    "⚠️ AVISO: Variável 'AD_URL' não definida em produção. "
-                    "O sistema está operando no modo Mock de desenvolvimento."
-                )
-        logger.info(f"Configurações carregadas com sucesso. Ambiente: '{cls.ENV.upper()}'")
+            banned = {"super-secret-key-change-in-production", "SUA_CHAVE_SECRETA_SUPER_FORTE_AQUI_ALTERAR_EM_PRODUCAO"}
+            if len(cls.JWT_SECRET) < 32 or cls.JWT_SECRET in banned:
+                raise RuntimeError("JWT_SECRET forte é obrigatório em produção")
+            if urlparse(cls.AD_URL).scheme != "ldaps":
+                raise RuntimeError("Produção requer AD_URL com LDAPS")
+            if not cls.AD_BASEDN or not (cls.AD_BIND_USER and cls.AD_BIND_PASSWORD):
+                raise RuntimeError("AD_BASEDN e conta de serviço são obrigatórios em produção")
+            if not cls.ALLOWED_ORIGINS or "*" in cls.ALLOWED_ORIGINS:
+                raise RuntimeError("ALLOWED_ORIGINS explícito é obrigatório em produção")
 
 
-# Instância global de configurações
 settings = Settings()
 settings.validate_config()
