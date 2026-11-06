@@ -10,23 +10,26 @@ Regras centrais:
   transação (RF021 / RNF002 / RNF006).
 * Dados do AGHU são somente leitura (RNF005).
 """
+import logging
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from ..helpers.audit_helper import registrar_auditoria
-from ..providers.implementations.aghu_solicitacao_postgres_provider import AghuSolicitacaoPostgresProvider
-from ..providers.implementations.caso_postgres_provider import CasoPostgresProvider
+from ..providers.interfaces.aghu_solicitacao_provider_interface import AghuSolicitacaoProviderInterface
+from ..providers.interfaces.caso_provider_interface import CasoProviderInterface
+
+logger = logging.getLogger("casos")
 
 TIPOS_EXAME = {"HP", "CO", "CG", "CCV"}
 ETAPA_ARQUIVO = "ARQUIVO"
 STATUS_EM_ANDAMENTO = "EM_ANDAMENTO"
 STATUS_ARQUIVADO = "ARQUIVADO"
 
-# Perfis (RF002). Ajustar os nomes ao que o RBAC local do projeto gravar na tabela de usuários.
+# Perfis (RF002), os mesmos do RBAC local (`authorized_users`).
 PERFIL_RECEPCAO = "RECEPCAO"
 PERFIL_LABORATORIO = "LABORATORIO"
 PERFIL_RESIDENTE = "RESIDENTE"
@@ -62,15 +65,18 @@ def formatar_identificador(sigla: str, numero: int, ano: int) -> str:
 
 
 def _agora() -> str:
+    """Agora em UTC, texto ISO 8601 (formato das datas dos casos)."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def _perfil(usuario: Dict[str, Any]) -> str:
-    return str(usuario.get("perfil") or usuario.get("role") or "").upper()
+    """Perfil do usuário logado (lido do banco por decode_token)."""
+    return str(usuario.get("role") or "").upper()
 
 
 def _login(usuario: Dict[str, Any]) -> str:
-    return str(usuario.get("username") or usuario.get("sub") or "desconhecido")
+    """Login do usuário logado."""
+    return str(usuario["username"])
 
 
 def _status_derivado(etapa: str) -> str:
@@ -79,25 +85,29 @@ def _status_derivado(etapa: str) -> str:
 
 
 def _exigir_perfil(usuario: Dict[str, Any], permitidos: set, acao: str) -> None:
+    """403 se o perfil do usuário não está entre os permitidos para a ação."""
     if _perfil(usuario) not in permitidos:
         raise HTTPException(status_code=403, detail=f"Seu perfil não tem permissão para {acao}.")
 
 
 def _motivo_obrigatorio(motivo: Optional[str]) -> str:
+    """Motivo sem espaços nas pontas; 422 se vazio."""
     texto = (motivo or "").strip()
     if not texto:
         raise HTTPException(status_code=422, detail="O motivo é obrigatório.")
     return texto
 
 
-async def _caso_ou_404(provider: CasoPostgresProvider, caso_id: int) -> Dict[str, Any]:
+async def _caso_ou_404(provider: CasoProviderInterface, caso_id: int) -> Dict[str, Any]:
+    """Caso ativo pelo id ou 404."""
     caso = await provider.buscar_por_id(caso_id)
     if not caso:
         raise HTTPException(status_code=404, detail="Caso não encontrado.")
     return caso
 
 
-async def _exigir_sem_pendencias(provider: CasoPostgresProvider, caso_id: int) -> None:
+async def _exigir_sem_pendencias(provider: CasoProviderInterface, caso_id: int) -> None:
+    """409 se o caso tem inconformidade aberta (RF019 / RN-03)."""
     if await provider.contar_pendencias_abertas(caso_id) > 0:
         raise HTTPException(
             status_code=409,
@@ -105,7 +115,7 @@ async def _exigir_sem_pendencias(provider: CasoPostgresProvider, caso_id: int) -
         )
 
 
-async def _esta_em_desvio(provider: CasoPostgresProvider, caso: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def _esta_em_desvio(provider: CasoProviderInterface, caso: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Retorna a movimentação de encaminhamento se o caso está aguardando retorno."""
     ultima = await provider.ultima_movimentacao_desvio(caso["id"])
     if ultima and ultima["tipo"] == "ENCAMINHAMENTO" and ultima["etapa_destino"] == caso["etapa_atual"]:
@@ -114,7 +124,7 @@ async def _esta_em_desvio(provider: CasoPostgresProvider, caso: Dict[str, Any]) 
 
 
 async def _gravar(
-    provider: CasoPostgresProvider,
+    provider: CasoProviderInterface,
     *,
     usuario: Dict[str, Any],
     ip: Optional[str],
@@ -123,6 +133,7 @@ async def _gravar(
     anteriores: Optional[Dict[str, Any]],
     novos: Dict[str, Any],
 ) -> None:
+    """Registra a auditoria NEGOCIO_CLINICO do caso na transação do controller (commit=False)."""
     await registrar_auditoria(
         db=provider.session,
         usuario=_login(usuario),
@@ -140,6 +151,7 @@ async def _gravar(
 # UC002 - Abrir caso a partir do AGHU                                          #
 # --------------------------------------------------------------------------- #
 def _validar_solicitacao(solicitacao: str) -> str:
+    """Número da solicitação só com dígitos; 422 caso contrário."""
     numero = (solicitacao or "").strip()
     if not numero.isdigit():
         raise HTTPException(status_code=422, detail="Informe um número de solicitação válido.")
@@ -148,15 +160,16 @@ def _validar_solicitacao(solicitacao: str) -> str:
 
 async def consultar_solicitacao_aghu(
     solicitacao: str,
-    provider: CasoPostgresProvider,
-    aghu: AghuSolicitacaoPostgresProvider,
+    provider: CasoProviderInterface,
+    aghu: AghuSolicitacaoProviderInterface,
 ) -> Dict[str, Any]:
     """Pré-visualização para a Recepção confirmar antes de criar o caso."""
     numero = _validar_solicitacao(solicitacao)
     try:
         cabecalho = await aghu.buscar_solicitacao(numero)
         amostras = await aghu.listar_amostras(numero) if cabecalho else []
-    except Exception:  # não expor detalhes do banco (RNF007)
+    except Exception as erro:  # não expor detalhes do banco (RNF007)
+        logger.error("Falha ao consultar o AGHU: %s", erro.__class__.__name__)
         raise HTTPException(status_code=503, detail="AGHU indisponível no momento. Tente novamente em instantes.")
     if not cabecalho:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada no AGHU.")
@@ -169,9 +182,10 @@ async def abrir_caso(
     tipo_exame: str,
     usuario: Dict[str, Any],
     ip: Optional[str],
-    provider: CasoPostgresProvider,
-    aghu: AghuSolicitacaoPostgresProvider,
+    provider: CasoProviderInterface,
+    aghu: AghuSolicitacaoProviderInterface,
 ) -> Dict[str, Any]:
+    """UC002: cria o caso (um por solicitação) com identificador interno, amostras, movimentação e auditoria."""
     _exigir_perfil(usuario, {PERFIL_RECEPCAO}, "abrir casos")
     numero = _validar_solicitacao(solicitacao)
     tipo = (tipo_exame or "").strip().upper()
@@ -184,7 +198,8 @@ async def abrir_caso(
     try:
         cabecalho = await aghu.buscar_solicitacao(numero)
         amostras = await aghu.listar_amostras(numero) if cabecalho else []
-    except Exception:
+    except Exception as erro:  # não expor detalhes do banco (RNF007)
+        logger.error("Falha ao consultar o AGHU: %s", erro.__class__.__name__)
         raise HTTPException(status_code=503, detail="AGHU indisponível no momento. Nenhum caso foi criado.")
     if not cabecalho:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada no AGHU.")
@@ -234,8 +249,10 @@ async def abrir_caso(
     except IntegrityError:
         await provider.rollback()
         raise HTTPException(status_code=409, detail="Já existe um caso aberto para esta solicitação.")
-    except Exception:
+    except Exception as erro:
         await provider.rollback()
+        # Padrão de log de erro: ação + tipo da exceção, sem dados do caso (RNF007).
+        logger.error("Falha em %s: %s", "ABRIR_CASO", erro.__class__.__name__)
         raise
     return await obter_caso(caso_id, usuario, provider)
 
@@ -244,8 +261,9 @@ async def abrir_caso(
 # UC019 - Buscar casos                                                         #
 # --------------------------------------------------------------------------- #
 async def listar_casos(
-    filtros: Dict[str, Any], pagina: int, limite: int, provider: CasoPostgresProvider
+    filtros: Dict[str, Any], pagina: int, limite: int, provider: CasoProviderInterface
 ) -> Dict[str, Any]:
+    """UC019: busca paginada de casos ativos com os filtros informados."""
     pagina = max(pagina, 1)
     limite = min(max(limite, 1), 100)
     limpos = {k: (v.strip() if isinstance(v, str) else v) or None for k, v in filtros.items()}
@@ -257,7 +275,8 @@ async def listar_casos(
     return {"items": itens, "total": total, "pagina": pagina, "limite": limite}
 
 
-async def obter_caso(caso_id: int, usuario: Dict[str, Any], provider: CasoPostgresProvider) -> Dict[str, Any]:
+async def obter_caso(caso_id: int, usuario: Dict[str, Any], provider: CasoProviderInterface) -> Dict[str, Any]:
+    """Detalhe do caso com amostras e as ações que o perfil pode executar na etapa atual."""
     caso = await _caso_ou_404(provider, caso_id)
     amostras = await provider.listar_amostras(caso_id)
     etapa = caso["etapa_atual"]
@@ -281,8 +300,9 @@ async def obter_caso(caso_id: int, usuario: Dict[str, Any], provider: CasoPostgr
 # UC017 - Concluir etapa com validação                                         #
 # --------------------------------------------------------------------------- #
 async def concluir_etapa(
-    caso_id: int, usuario: Dict[str, Any], ip: Optional[str], provider: CasoPostgresProvider
+    caso_id: int, usuario: Dict[str, Any], ip: Optional[str], provider: CasoProviderInterface
 ) -> Dict[str, Any]:
+    """UC017: avança o caso para a próxima etapa do fluxo, se não houver pendências."""
     caso = await _caso_ou_404(provider, caso_id)
     etapa = caso["etapa_atual"]
     if caso["status"] == STATUS_ARQUIVADO:
@@ -312,8 +332,10 @@ async def concluir_etapa(
             novos={"etapa_atual": destino, "status": status},
         )
         await provider.commit()
-    except Exception:
+    except Exception as erro:
         await provider.rollback()
+        # Padrão de log de erro: ação + tipo da exceção, sem dados do caso (RNF007).
+        logger.error("Falha em %s: %s", "CONCLUIR_ETAPA", erro.__class__.__name__)
         raise
     return await obter_caso(caso_id, usuario, provider)
 
@@ -323,8 +345,9 @@ async def concluir_etapa(
 # --------------------------------------------------------------------------- #
 async def encaminhar_caso(
     caso_id: int, destino: str, motivo: Optional[str], usuario: Dict[str, Any],
-    ip: Optional[str], provider: CasoPostgresProvider,
+    ip: Optional[str], provider: CasoProviderInterface,
 ) -> Dict[str, Any]:
+    """UC012: encaminha o caso a um destino permitido pelo fluxo, com motivo obrigatório."""
     texto = _motivo_obrigatorio(motivo)
     destino = (destino or "").strip().upper()
     caso = await _caso_ou_404(provider, caso_id)
@@ -354,16 +377,19 @@ async def encaminhar_caso(
             anteriores={"etapa_atual": etapa}, novos={"etapa_atual": destino, "motivo": texto},
         )
         await provider.commit()
-    except Exception:
+    except Exception as erro:
         await provider.rollback()
+        # Padrão de log de erro: ação + tipo da exceção, sem dados do caso (RNF007).
+        logger.error("Falha em %s: %s", "ENCAMINHAR_CASO", erro.__class__.__name__)
         raise
     return await obter_caso(caso_id, usuario, provider)
 
 
 async def retornar_caso(
     caso_id: int, motivo: Optional[str], usuario: Dict[str, Any],
-    ip: Optional[str], provider: CasoPostgresProvider,
+    ip: Optional[str], provider: CasoProviderInterface,
 ) -> Dict[str, Any]:
+    """UC012: devolve o caso encaminhado à etapa de origem, com motivo obrigatório."""
     texto = _motivo_obrigatorio(motivo)
     caso = await _caso_ou_404(provider, caso_id)
     etapa = caso["etapa_atual"]
@@ -392,8 +418,10 @@ async def retornar_caso(
             anteriores={"etapa_atual": etapa}, novos={"etapa_atual": origem, "motivo": texto},
         )
         await provider.commit()
-    except Exception:
+    except Exception as erro:
         await provider.rollback()
+        # Padrão de log de erro: ação + tipo da exceção, sem dados do caso (RNF007).
+        logger.error("Falha em %s: %s", "RETORNAR_CASO", erro.__class__.__name__)
         raise
     return await obter_caso(caso_id, usuario, provider)
 
@@ -401,6 +429,7 @@ async def retornar_caso(
 # --------------------------------------------------------------------------- #
 # UC018 - Histórico do caso                                                    #
 # --------------------------------------------------------------------------- #
-async def historico_caso(caso_id: int, provider: CasoPostgresProvider) -> List[Dict[str, Any]]:
+async def historico_caso(caso_id: int, provider: CasoProviderInterface) -> List[Dict[str, Any]]:
+    """UC018: movimentações do caso em ordem cronológica."""
     await _caso_ou_404(provider, caso_id)
     return await provider.listar_movimentacoes(caso_id)

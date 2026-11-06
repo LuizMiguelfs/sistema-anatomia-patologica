@@ -5,7 +5,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from src.providers.implementations.caso_postgres_provider import CasoPostgresProvider
+from src.providers.implementations.caso_sqlite_provider import CasoSqliteProvider
 
 
 def test_proximo_numero_por_sigla_e_ano(tmp_path, monkeypatch):
@@ -17,7 +17,7 @@ def test_proximo_numero_por_sigla_e_ano(tmp_path, monkeypatch):
         engine = create_async_engine(dsn)
         try:
             async with async_sessionmaker(engine)() as session:
-                provider = CasoPostgresProvider(session)
+                provider = CasoSqliteProvider(session)
                 seq = [await provider.proximo_numero(s, a)
                        for s, a in [("HP", 2026), ("HP", 2026), ("CG", 2026), ("HP", 2027), ("HP", 2026)]]
                 await session.rollback()  # reserva desfeita junto com a transação do caso

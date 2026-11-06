@@ -8,25 +8,6 @@ from .providers.implementations.paciente_postgres_provider import PacientePostgr
 from .providers.implementations.paciente_csv_provider import PacienteCsvProvider
 from .resources.database import get_aghu_db_session
 
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from .providers.implementations.caso_postgres_provider import CasoPostgresProvider
-from .providers.implementations.aghu_solicitacao_postgres_provider import AghuSolicitacaoPostgresProvider
-from .resources.database import get_aghu_db_session, get_app_db_session
-
-
-def get_caso_provider(
-    session: AsyncSession = Depends(get_app_db_session),
-) -> CasoPostgresProvider:
-    return CasoPostgresProvider(session=session)
-
-
-def get_aghu_solicitacao_provider(
-    session: AsyncSession = Depends(get_aghu_db_session),
-) -> AghuSolicitacaoPostgresProvider:
-    return AghuSolicitacaoPostgresProvider(session=session)
-
 # 1. Funções "getter" simples e independentes (privadas por convenção)
 def _get_paciente_postgres_provider(
     session: AsyncSession = Depends(get_aghu_db_session)
@@ -85,3 +66,24 @@ from .providers.implementations.dashboard_demo_provider import DashboardDemoProv
 def get_dashboard_provider() -> DashboardProviderInterface:
     """Provedor do painel de indicadores (demonstrativo até haver fonte real)."""
     return DashboardDemoProvider()
+
+
+# 6. Casos (Membro 4): casos no banco local e leitura de solicitações no AGHU.
+from .providers.interfaces.caso_provider_interface import CasoProviderInterface
+from .providers.implementations.caso_sqlite_provider import CasoSqliteProvider
+from .providers.interfaces.aghu_solicitacao_provider_interface import AghuSolicitacaoProviderInterface
+from .providers.implementations.aghu_solicitacao_postgres_provider import AghuSolicitacaoPostgresProvider
+
+
+def get_caso_provider(
+    session: AsyncSession = Depends(get_app_db_session),
+) -> CasoProviderInterface:
+    """Provedor dos casos (banco local da aplicação)."""
+    return CasoSqliteProvider(session=session)
+
+
+def get_aghu_solicitacao_provider(
+    session: AsyncSession = Depends(get_aghu_db_session),
+) -> AghuSolicitacaoProviderInterface:
+    """Provedor somente leitura das solicitações de exame no AGHU (RNF005)."""
+    return AghuSolicitacaoPostgresProvider(session=session)

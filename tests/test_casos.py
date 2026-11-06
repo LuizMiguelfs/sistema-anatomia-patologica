@@ -12,9 +12,9 @@ from src.controllers import caso_controller as ctrl
 
 pytestmark = pytest.mark.asyncio
 
-RECEPCAO = {"username": "ana.recepcao", "perfil": "RECEPCAO"}
-LAB = {"username": "bia.lab", "perfil": "LABORATORIO"}
-RESIDENTE = {"username": "caio.res", "perfil": "RESIDENTE"}
+RECEPCAO = {"username": "ana.recepcao", "role": "RECEPCAO"}
+LAB = {"username": "bia.lab", "role": "LABORATORIO"}
+RESIDENTE = {"username": "caio.res", "role": "RESIDENTE"}
 
 HP = {
     ("INICIO", "AVANCO"): ["RECEPCAO"], ("RECEPCAO", "AVANCO"): ["MACROSCOPIA"],
@@ -46,7 +46,7 @@ class FakeAghu:
 
 
 class FakeProvider:
-    """Imita CasoPostgresProvider em memória."""
+    """Imita CasoSqliteProvider em memória (CasoProviderInterface)."""
 
     def __init__(self):
         self.session = object()
