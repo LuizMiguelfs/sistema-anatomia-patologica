@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from src.dependencies import get_paciente_provider
-from src.helpers.crypto_helper import decifrar
+from src.helpers.crypto_helper import decifrar_campos
 from src.main import app
 from src.models.audit_log import AuditLog
 from src.providers.implementations.paciente_csv_provider import PacienteCsvProvider
@@ -168,7 +168,7 @@ def test_criar_normaliza_persiste_e_audita(ambiente):
     log = logs[0]
     assert (log.usuario, log.categoria, log.acao, log.recurso) == ("admin", "NEGOCIO_CLINICO", "CRIAR_PACIENTE", "paciente:10000017")
     assert log.dados_anteriores is None
-    assert json.loads(decifrar(log.dados_novos))["nome"] == "MARIA DA SILVA"
+    assert decifrar_campos(json.loads(log.dados_novos))["nome"] == "MARIA DA SILVA"
     assert log.ip_origem
 
 
@@ -216,8 +216,8 @@ def test_atualizar_audita_antes_e_depois(ambiente):
 
     log = _auditorias(client)[-1]
     assert log.acao == "ALTERAR_PACIENTE" and log.recurso == "paciente:77002"
-    assert json.loads(decifrar(log.dados_anteriores))["nome"] == original["nome"]
-    assert json.loads(decifrar(log.dados_novos))["nome"] == "BRUNO LIMA ATUALIZADO"
+    assert decifrar_campos(json.loads(log.dados_anteriores))["nome"] == original["nome"]
+    assert decifrar_campos(json.loads(log.dados_novos))["nome"] == "BRUNO LIMA ATUALIZADO"
 
 
 def test_atualizar_mantendo_proprio_cpf_nao_conflita(ambiente):
@@ -246,7 +246,7 @@ def test_excluir_e_logico_e_auditado(ambiente):
 
     log = _auditorias(client)[-1]
     assert log.acao == "EXCLUIR_PACIENTE"
-    assert json.loads(decifrar(log.dados_anteriores))["codigo"] == 77004
+    assert decifrar_campos(json.loads(log.dados_anteriores))["codigo"] == 77004
 
 
 def test_codigo_nao_e_reutilizado_apos_exclusao(ambiente):

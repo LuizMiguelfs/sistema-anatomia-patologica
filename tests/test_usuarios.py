@@ -9,7 +9,6 @@ import pytest
 
 from src.auth.auth import auth_handler
 from src.controllers import usuario_controller
-from src.helpers.crypto_helper import decifrar
 
 GRUPO_TI = "GLO-SEC-HCPE-SETISD"
 URL = "/api/admin/usuarios"
@@ -44,7 +43,7 @@ def _auditoria(client) -> list:
         linhas = conn.execute(
             "SELECT usuario, categoria, acao, recurso, dados_anteriores, dados_novos, ip_origem "
             "FROM audit_logs WHERE recurso LIKE 'usuario:%' ORDER BY id").fetchall()
-    return [(u, c, a, r, json.loads(decifrar(ant)) if ant else None, json.loads(decifrar(nov)), ip)
+    return [(u, c, a, r, json.loads(ant) if ant else None, json.loads(nov), ip)
             for u, c, a, r, ant, nov, ip in linhas]
 
 

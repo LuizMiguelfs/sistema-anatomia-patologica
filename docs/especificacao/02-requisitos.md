@@ -47,7 +47,7 @@
 ## 2. Requisitos Não Funcionais (RNF)
 | ID | Categoria | Descrição |
 | :--- | :--- | :--- |
-| RNF001 | Criptografia | Tokens JWT assinados com HS256 e Cookies HttpOnly para Refresh Tokens. Dados sensíveis gravados pelo SAP (dados de paciente, inclusive no antes/depois da auditoria) cifrados com AES-256. |
+| RNF001 | Criptografia | Tokens JWT assinados com HS256 e Cookies HttpOnly para Refresh Tokens. Dados que identificam um único paciente (nome, nome da mãe e do pai, CPF, CNS, data de nascimento e prontuário) gravados pelo SAP são cifrados com AES-256, inclusive no antes/depois da auditoria; o restante fica legível. |
 | RNF002 | LGPD / Auditoria | Trilha de auditoria obrigatória (antes/depois) em tabela `audit_logs` para mutações. |
 | RNF003 | Segurança HTTP | Middleware de Security Headers (anti-cache `no-store`, `X-Frame-Options: DENY`, anti-XSS). |
 | RNF004 | Governança Segredos | Proibição de hardcode e validação de env vars na inicialização (`src/config.py`). |

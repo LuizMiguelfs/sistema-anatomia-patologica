@@ -36,7 +36,7 @@ Os critérios de negócio estão em `02-requisitos.md` e `03-casos-uso.md`. Este
 | Regra | Aplicação |
 |---|---|
 | Testes para cada funcionalidade nova | Backend: `pytest` em `tests/`. Frontend: um `.spec.ts` (Vitest) para cada novo service ou store, ao lado do arquivo (`npm test`). |
-| AES-256 para dados sensíveis | AES-256-GCM em `src/helpers/crypto_helper.py`, chave em `SAP_DATA_KEY`. Dados de paciente gravados pelo SAP e o antes/depois da auditoria são cifrados. |
+| AES-256 para dados sensíveis | AES-256-GCM em `src/helpers/crypto_helper.py`, chave em `SAP_DATA_KEY`. Cifra só o que identifica um único paciente (nome, nome da mãe e do pai, CPF, CNS, data de nascimento e prontuário), nas tabelas do SAP e no antes/depois da auditoria clínica (`CAMPOS_PACIENTE`). Busca exata por esses valores usa índice HMAC (`indice_busca`). |
 | Dependências documentadas | Tabela "Dependências externas documentadas" do `06-arquitetura.md`, atualizada no mesmo commit que adiciona a dependência. |
 | Sem exclusão física | Nenhum `DELETE` pela aplicação: registros são inativados ou marcados (`deleted_at`, `active`/`ativo`). A trilha `audit_logs` tem triggers que bloqueiam `UPDATE`/`DELETE`. |
 | RBAC | Perfil lido do banco local a cada requisição (`auth_handler.decode_token`); rotas restritas com `auth_handler.require_roles(...)`. |

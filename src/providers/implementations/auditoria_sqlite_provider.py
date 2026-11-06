@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Mapping, Optional
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...helpers.crypto_helper import decifrar
 from ...helpers.sql_helper import read_sql_file
 from ..interfaces.auditoria_provider_interface import AuditoriaProviderInterface
 
@@ -58,12 +57,9 @@ class AuditoriaSqliteProvider(AuditoriaProviderInterface):
 
     @staticmethod
     def _normalizar(row: Mapping[str, Any]) -> Dict[str, Any]:
-        """Converte uma linha do banco para o formato padrão da interface (antes/depois decifrados)."""
+        """Converte uma linha do banco para o formato padrão da interface."""
         registro = dict(row)
         registro["created_at"] = _ler_data(registro["created_at"])
-        for campo in ("dados_anteriores", "dados_novos"):
-            if campo in registro:
-                registro[campo] = decifrar(registro[campo])
         return registro
 
     @staticmethod

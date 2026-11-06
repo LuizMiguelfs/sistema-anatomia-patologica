@@ -16,7 +16,7 @@ O provedor de pacientes é selecionado por `PACIENTE_PROVIDER_TYPE` em `src/conf
 
 - `authorized_users`: login de rede, nome (vindo do AD na inclusão), perfil, situação ativa e timestamps. Controle de autorização local complementar à autenticação de rede. Gerenciada pela Chefia (RF028); não há exclusão: o acesso é inativado (`active = 0`).
 - `refresh_tokens`: hash SHA-256 do token de renovação, identificação do usuário, expiração, metadados (`groups`), data de criação e `deleted_at` (exclusão lógica ao renovar ou sair). Tratar como dados sensíveis; jamais registrar tokens nos logs.
-- `audit_logs`: usuário, categoria, ação, recurso, valores anteriores/novos, origem e timestamp. Registros históricos devem permanecer imutáveis. `dados_anteriores` e `dados_novos` são gravados cifrados com AES-256 (`aes256gcm:v1:...`) e decifrados na leitura pela API.
+- `audit_logs`: usuário, categoria, ação, recurso, valores anteriores/novos, origem e timestamp. Registros históricos devem permanecer imutáveis. Em registros `NEGOCIO_CLINICO`, os campos de `dados_anteriores`/`dados_novos` que identificam o paciente (nome, nome da mãe e do pai, CPF, CNS, data de nascimento e prontuário) são gravados cifrados com AES-256 (`aes256gcm:v1:...`) e decifrados na leitura pela API; os demais campos ficam legíveis.
 
 O esquema canônico das tabelas locais é definido em `src/models/authorized_user.py`, `src/models/refresh_token.py` e `src/models/audit_log.py` e nas revisões Alembic. Referências a `PRONTUARIO` e `EVOLUCAO` em propostas anteriores eram **modelos conceituais**, não tabelas comprovadamente implementadas neste repositório.
 
@@ -44,12 +44,12 @@ O banco AGHU não é migrado pelo Alembic local. Em produção, o usuário de co
 ## Regras de Integridade
 * Trilha de auditoria obrigatória em `audit_logs` para mutações e proibição de exclusão física de registros de auditoria.
 * Nenhuma tabela do SAP sofre exclusão física: usar exclusão lógica (`deleted_at`) ou situação (`active`/`ativo`).
-* Dados sensíveis gravados pelo SAP são cifrados com AES-256 (`SPEC.md`).
+* Dados que identificam um único paciente (nome, nome da mãe e do pai, CPF, CNS, data de nascimento e prontuário) são cifrados com AES-256 (`SPEC.md`). Busca exata por um desses valores usa índice HMAC-SHA256, nunca o valor em claro.
 
 ## Esquemas JSON
 
 ### [SCHEMA] Esquema JSON - AuditLog
-Formato do registro como entra no helper `registrar_auditoria` e como sai da API (no banco, `dados_anteriores` e `dados_novos` ficam cifrados).
+Formato do registro como entra no helper `registrar_auditoria` e como sai da API (no banco, os campos que identificam o paciente ficam cifrados).
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",

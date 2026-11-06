@@ -4,6 +4,10 @@ Criptografia de dados sensíveis em repouso (AES-256)
 Regra do SPEC.md: dados sensíveis gravados pelo SAP usam AES-256. Aqui: AES-256-GCM
 (cifra autenticada), com nonce aleatório de 12 bytes por valor.
 
+Só é cifrado o que identifica um único paciente (CAMPOS_PACIENTE): nome, documentos,
+prontuário, filiação e data de nascimento. O restante fica legível para consulta.
+Para buscar por um valor cifrado (ex.: prontuário) usa-se `indice_busca` (HMAC-SHA256).
+
 Chave: variável de ambiente SAP_DATA_KEY, 32 bytes em base64 (ver .env.example).
 Formato gravado: "aes256gcm:v1:" + base64(nonce + texto cifrado + tag).
 Valores sem esse prefixo são lidos como texto puro (registros anteriores a esta versão).
@@ -11,15 +15,25 @@ Valores sem esse prefixo são lidos como texto puro (registros anteriores a esta
 
 import base64
 import binascii
+import hashlib
+import hmac
+import json
 import os
+import re
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 PREFIXO = "aes256gcm:v1:"
 _TAMANHO_NONCE = 12
+
+#: Campos que, sozinhos ou juntos, identificam um único paciente (cifrados com AES-256).
+CAMPOS_PACIENTE = frozenset({
+    "nome", "paciente_nome", "nome_paciente", "nome_mae", "nome_pai",
+    "cpf", "cns", "dt_nascimento", "data_nascimento", "prontuario", "prontuario_aghu",
+})
 
 
 class ChaveCriptografiaInvalidaError(RuntimeError):
@@ -67,3 +81,48 @@ def decifrar(valor: Optional[str]) -> Optional[str]:
         # Sem detalhes do conteúdo na mensagem (RNF007).
         raise DadoCifradoInvalidoError("Dado cifrado inválido ou gravado com outra chave.") from None
     return texto.decode("utf-8")
+
+
+def cifrar_campos_paciente(dados: Any) -> Any:
+    """Cifra, em qualquer nível de dicionários e listas, os valores dos CAMPOS_PACIENTE."""
+    if isinstance(dados, dict):
+        return {
+            chave: (cifrar(json.dumps(valor, ensure_ascii=False, default=str))
+                    if chave in CAMPOS_PACIENTE and valor is not None else cifrar_campos_paciente(valor))
+            for chave, valor in dados.items()
+        }
+    if isinstance(dados, list):
+        return [cifrar_campos_paciente(item) for item in dados]
+    return dados
+
+
+def decifrar_campos(dados: Any) -> Any:
+    """Inverso de `cifrar_campos_paciente`: decifra todo texto com o prefixo AES-256."""
+    if isinstance(dados, dict):
+        return {chave: decifrar_campos(valor) for chave, valor in dados.items()}
+    if isinstance(dados, list):
+        return [decifrar_campos(item) for item in dados]
+    if isinstance(dados, str) and dados.startswith(PREFIXO):
+        return json.loads(decifrar(dados))
+    return dados
+
+
+@lru_cache(maxsize=1)
+def _chave_indice() -> bytes:
+    """Chave do índice de busca, derivada da SAP_DATA_KEY (separada da chave de cifra)."""
+    return hmac.new(validar_chave(os.getenv("SAP_DATA_KEY")), b"sap-indice-busca-v1", hashlib.sha256).digest()
+
+
+def normalizar_prontuario(valor: Optional[str]) -> str:
+    """Só os dígitos do prontuário: "1903344/8" e "19033448" são o mesmo prontuário."""
+    return re.sub(r"\D", "", valor or "")
+
+
+def indice_busca(valor: Optional[str]) -> Optional[str]:
+    """
+    Índice determinístico (HMAC-SHA256) para busca exata de um valor cifrado.
+    Não permite recuperar o valor; `None` ou vazio devolve `None`.
+    """
+    if not valor:
+        return None
+    return hmac.new(_chave_indice(), valor.encode("utf-8"), hashlib.sha256).hexdigest()

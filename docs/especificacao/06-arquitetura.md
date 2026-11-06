@@ -8,7 +8,7 @@
 
 ## 2. Conformidade LGPD
 * Anonimização e gestão de consentimento (TCLE).
-* Dados sensíveis gravados pelo SAP são cifrados com AES-256 (ver "Segurança e privacidade").
+* Dados que identificam um único paciente (nome, nome da mãe e do pai, CPF, CNS, data de nascimento e prontuário) são cifrados com AES-256 (ver "Segurança e privacidade").
 * Anonimização e TCLE: forma de aplicação pendente de definição com o SETISD.
 
 ## 3. Acessos
@@ -57,7 +57,7 @@ Resources e SQL parametrizado (src/resources/, src/providers/sql/)
 
 ## 6. Segurança e privacidade
 
-JWT e cookies HttpOnly são administrados no módulo de autenticação. Dados sensíveis gravados pelo SAP são cifrados com AES-256-GCM (`src/helpers/crypto_helper.py`); a chave `SAP_DATA_KEY` é obrigatória em todos os ambientes e, se perdida, os dados cifrados não podem ser lidos. Proteção de rotas (autenticação e permissões), RBAC e auditoria devem ser validados com perfis reais da instituição. Não imprimir tokens, senhas, dados clínicos ou DSNs nos logs. Segurança e conformidade LGPD requerem revisão institucional e não podem ser inferidas apenas do auditor estático.
+JWT e cookies HttpOnly são administrados no módulo de autenticação. Dados que identificam um único paciente são cifrados com AES-256-GCM (`src/helpers/crypto_helper.py`, lista em `CAMPOS_PACIENTE`); busca exata por eles usa índice HMAC-SHA256 (`indice_busca`); a chave `SAP_DATA_KEY` é obrigatória em todos os ambientes e, se perdida, os dados cifrados não podem ser lidos. Proteção de rotas (autenticação e permissões), RBAC e auditoria devem ser validados com perfis reais da instituição. Não imprimir tokens, senhas, dados clínicos ou DSNs nos logs. Segurança e conformidade LGPD requerem revisão institucional e não podem ser inferidas apenas do auditor estático.
 
 O backend oferece `GET /api/health` para diagnóstico. O painel só deve anunciar indicadores reais quando conectado a fontes reais. `ALLOWED_ORIGINS=*` serve apenas para desenvolvimento; configurar origens explícitas em produção.
 

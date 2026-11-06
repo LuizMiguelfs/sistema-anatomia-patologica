@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, status
 
+from ..helpers.crypto_helper import decifrar_campos
 from ..providers.interfaces.auditoria_provider_interface import AuditoriaProviderInterface
 
 #: Categoria exibida no histórico de um caso/recurso, aberto a qualquer usuário autenticado.
@@ -20,11 +21,11 @@ CATEGORIA_HISTORICO = "NEGOCIO_CLINICO"
 
 
 def _json_ou_texto(valor: Optional[str]) -> Any:
-    """Converte o JSON salvo de volta em objeto; se não for JSON válido, devolve o texto."""
+    """Converte o JSON salvo de volta em objeto (com os campos do paciente decifrados)."""
     if valor is None:
         return None
     try:
-        return json.loads(valor)
+        return decifrar_campos(json.loads(valor))
     except (TypeError, ValueError):
         return valor
 
