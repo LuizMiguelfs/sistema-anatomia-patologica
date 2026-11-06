@@ -51,3 +51,4 @@ Toda dependência nova precisa constar nesta lista antes de entrar no projeto (S
 | Dependência | Onde | Para quê |
 |---|---|---|
 | `cryptography` (46.0.3) | backend (`pyproject.toml`) | AES-256-GCM dos dados sensíveis gravados pelo SAP (`src/helpers/crypto_helper.py`). Chave em `SAP_DATA_KEY`. |
+| `vitest` (2.1.9) | frontend, só desenvolvimento (`frontend/package.json`) | Testes `.spec.ts` dos services e stores do front (`npm test`). |
