@@ -207,6 +207,7 @@ const buscou = ref(false);
 const erroLista = ref('');
 const totalPaginas = computed(() => Math.max(1, Math.ceil(store.total / LIMITE)));
 
+/** Busca a página atual de casos com os filtros preenchidos; erro vira mensagem na tela. */
 async function carregar() {
   erroLista.value = '';
   try {
@@ -219,6 +220,7 @@ async function carregar() {
 }
 const pesquisar = () => { pagina.value = 1; return carregar(); };
 const irParaPagina = (n: number) => { pagina.value = n; return carregar(); };
+/** Limpa todos os filtros e volta à primeira página. */
 function limparFiltros() {
   Object.assign(filtros, { solicitacao: '', prontuario: '', identificador: '', tipo_exame: '', etapa: '', status: '' });
   return pesquisar();
@@ -231,10 +233,12 @@ const novo = reactive({
   dados: null as SolicitacaoAghu | null,
 });
 
+/** Abre o modal de abertura de caso com o formulário limpo. */
 function abrirModalNovo() {
   Object.assign(novo, { solicitacao: '', tipo: 'HP', consultando: false, salvando: false, erro: '', dados: null });
   modalNovo.value = true;
 }
+/** Pré-visualiza a solicitação no AGHU (paciente e amostras) antes de abrir o caso. */
 async function consultarAghu() {
   novo.erro = ''; novo.dados = null; novo.consultando = true;
   try {
@@ -245,6 +249,10 @@ async function consultarAghu() {
     novo.consultando = false;
   }
 }
+/**
+ * Abre o caso da solicitação consultada (UC002), atualiza a lista e já mostra o caso criado.
+ * O identificador interno (ex.: HP-0001/26) é gerado pelo backend.
+ */
 async function confirmarAbertura() {
   novo.erro = ''; novo.salvando = true;
   try {
@@ -268,9 +276,11 @@ const processando = ref(false);
 const modo = ref<'detalhe' | 'encaminhar' | 'retornar'>('detalhe');
 const acao = reactive({ destino: '', motivo: '' });
 
+/** Recarrega o detalhe e o histórico do caso em paralelo. */
 async function recarregarCaso(id: number) {
   [caso.value, historico.value] = await Promise.all([store.obter(id), store.historico(id)]);
 }
+/** Abre o modal do caso com detalhe, ações permitidas e histórico. */
 async function abrirModalCaso(id: number) {
   erroCaso.value = ''; modo.value = 'detalhe'; caso.value = null; historico.value = [];
   modalCaso.value = true;
@@ -280,9 +290,14 @@ async function abrirModalCaso(id: number) {
     erroCaso.value = mensagemErro(e);
   }
 }
+/** Troca o modal para o formulário de encaminhar ou retornar (motivo obrigatório). */
 function iniciarAcao(tipo: 'encaminhar' | 'retornar') {
   acao.destino = ''; acao.motivo = ''; erroCaso.value = ''; modo.value = tipo;
 }
+/**
+ * Executa uma ação sobre o caso aberto (concluir, encaminhar ou retornar) e,
+ * se der certo, recarrega o caso e a lista; se falhar, mostra a mensagem da API.
+ */
 async function executar(fn: () => Promise<CasoDetalhe>) {
   if (!caso.value) return;
   erroCaso.value = ''; processando.value = true;
@@ -308,6 +323,7 @@ const confirmarAcao = () =>
 // --- Formatação ---------------------------------------------------------------
 const rotuloEtapa = (e?: string | null) => (e ? ETAPAS[e] ?? e : '—');
 const formatarData = (iso: string) => (iso ? new Date(iso).toLocaleString('pt-BR') : '—');
+/** Texto legível de uma movimentação do histórico. */
 function rotuloMovimento(m: Movimentacao): string {
   const origem = rotuloEtapa(m.etapa_origem);
   const destino = rotuloEtapa(m.etapa_destino);
