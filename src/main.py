@@ -6,6 +6,9 @@ import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
+from .routers import caso
+app.include_router(caso.router)
+
 # Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
 

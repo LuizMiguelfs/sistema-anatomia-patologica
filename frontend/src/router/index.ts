@@ -36,6 +36,8 @@ const routes = [
     component: Configuracoes,
     meta: { requiresAuth: true },
   },
+  { path: '/casos', 
+    name: 'Casos', component: () => import('../views/Casos.vue') }
 ];
 
 const router = createRouter({
