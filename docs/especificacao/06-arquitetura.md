@@ -43,3 +43,11 @@ uv run uvicorn src.main:app --host 127.0.0.1 --port 8000
 ## Responsabilidade dos módulos
 
 Autenticação (1), auditoria/admin (2), pacientes (3), fluxo de casos (4), dashboard (5) e integração/infraestrutura/documentação (6). Os módulos 4 e 5 devem informar suas rotas e regras de negócio antes da homologação final.
+
+## Dependências externas documentadas
+
+Toda dependência nova precisa constar nesta lista antes de entrar no projeto (SPEC.md).
+
+| Dependência | Onde | Para quê |
+|---|---|---|
+| `cryptography` (46.0.3) | backend (`pyproject.toml`) | AES-256-GCM dos dados sensíveis gravados pelo SAP (`src/helpers/crypto_helper.py`). Chave em `SAP_DATA_KEY`. |

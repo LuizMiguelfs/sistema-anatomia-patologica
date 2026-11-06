@@ -13,6 +13,8 @@ os.environ["AUTH_ALLOW_MOCK"] = "true"
 os.environ["MOCK_AUTH_PASSWORD"] = "admin"  # somente fixture de teste
 os.environ["SQLITE_DSN"] = ""
 os.environ["JWT_SECRET"] = "chave-exclusiva-testes-nunca-usar-em-producao-1234567890"
+# Chave AES-256 só de teste (32 bytes em base64).
+os.environ["SAP_DATA_KEY"] = "dGVzdGUtYWVzMjU2LXNvbWVudGUtcGFyYS10ZXN0ZXM="
 os.environ.pop("SAP_ROLE_GROUP_MAP", None)
 
 import pytest

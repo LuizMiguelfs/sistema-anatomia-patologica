@@ -5,7 +5,6 @@ Uso: python -m scripts.provision_sap_user --username ... --role RECEPCAO \
 """
 import argparse
 import asyncio
-import json
 import os
 from datetime import datetime, timezone
 
@@ -13,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from src.auth.auth import ROLES, auth_handler, normalize_username, _role_group_policy
-from src.models.audit_log import AuditLog
+from src.helpers.audit_helper import registrar_auditoria
 from src.models.authorized_user import AuthorizedUser
 
 
@@ -58,9 +57,9 @@ async def main():
                 obj = AuthorizedUser(username=username, role=args.role, active=not args.deactivate)
                 db.add(obj)
             new = {"role": args.role, "active": not args.deactivate}
-            db.add(AuditLog(usuario=actor, categoria="SEGURANCA", acao="ALTERAR_ACESSO_SAP",
-                            recurso=f"usuario:{username}",
-                            dados_anteriores=json.dumps(previous), dados_novos=json.dumps(new)))
+            await registrar_auditoria(db, usuario=actor, categoria="SEGURANCA", acao="ALTERAR_ACESSO_SAP",
+                                      recurso=f"usuario:{username}", dados_anteriores=previous,
+                                      dados_novos=new, commit=False)
             await db.commit()
             print(f"Autorização atualizada: {username} / {args.role} / ativo={not args.deactivate}")
     finally:

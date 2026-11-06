@@ -9,6 +9,7 @@ import logging
 from typing import Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.audit_log import AuditLog, CATEGORIAS_AUDITORIA
+from .crypto_helper import cifrar
 
 logger = logging.getLogger("audit")
 
@@ -33,6 +34,9 @@ async def registrar_auditoria(
     Use `commit=False` quando a alteração auditada estiver na MESMA sessão: o log é apenas
     enviado ao banco (flush) e só é gravado no commit do chamador, junto com a alteração.
     Assim, ou os dois são gravados, ou nenhum é (RN-04).
+
+    `dados_anteriores` e `dados_novos` são gravados cifrados com AES-256 (podem conter dados
+    de paciente). A leitura pela API decifra; no banco ficam ilegíveis sem SAP_DATA_KEY.
 
     Exemplos usando os perfis reais do sistema (ADMINISTRADOR, MEDICO, ENFERMAGEM):
         # 1. Categoria SEGURANCA (Ex: ADMINISTRADOR alterando perfil):
@@ -64,8 +68,8 @@ async def registrar_auditoria(
         raise ValueError(f"Categoria de auditoria inválida: '{categoria}'. Use uma de {CATEGORIAS_AUDITORIA}.")
 
     try:
-        str_anteriores = json.dumps(dados_anteriores, ensure_ascii=False, default=str) if dados_anteriores is not None else None
-        str_novos = json.dumps(dados_novos, ensure_ascii=False, default=str) if dados_novos is not None else None
+        str_anteriores = cifrar(json.dumps(dados_anteriores, ensure_ascii=False, default=str)) if dados_anteriores is not None else None
+        str_novos = cifrar(json.dumps(dados_novos, ensure_ascii=False, default=str)) if dados_novos is not None else None
 
         log_entry = AuditLog(
             usuario=usuario,
