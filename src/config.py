@@ -11,9 +11,20 @@ class Settings:
     LOG_LEVEL = os.getenv("LOG_LEVEL", "info").lower()
     RAW_ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*")
     ALLOWED_ORIGINS = [x.strip() for x in RAW_ALLOWED_ORIGINS.split(",") if x.strip()]
-    PACIENTE_PROVIDER_TYPE = os.getenv("PACIENTE_PROVIDER_TYPE", "POSTGRES").upper()
+
     APP_DB_URL = os.getenv("APP_DB_URL", "sqlite+aiosqlite:///data/app.db")
     POSTGRES_DSN = os.getenv("POSTGRES_DSN", "")
+    # PR 1: pacientes. Usa CSV se POSTGRES_DSN nao estiver configurado.
+    PACIENTE_PROVIDER_TYPE = (
+        os.getenv("PACIENTE_PROVIDER_TYPE", "").strip()
+        or ("POSTGRES" if POSTGRES_DSN else "CSV")
+    ).upper()
+    PACIENTE_CSV_PATH = os.getenv("PACIENTE_CSV_PATH", "data/pacientes.csv")
+    # AGHU em somente-leitura, salvo habilitacao explicita.
+    PACIENTE_POSTGRES_ESCRITA = (
+        os.getenv("PACIENTE_POSTGRES_ESCRITA", "false").strip().lower()
+        in {"1", "true", "sim", "yes"}
+    )
     ORACLE_DSN = os.getenv("ORACLE_DSN", "")
     AD_URL = os.getenv("AD_URL", "")
     AD_BASEDN = os.getenv("AD_BASEDN", "DC=ebserhnet,DC=gov,DC=br")
