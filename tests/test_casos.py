@@ -254,3 +254,12 @@ async def test_listar_casos_pagina_e_filtra():
 
 async def test_historico_de_caso_inexistente():
     assert await _status(ctrl.historico_caso(99, FakeProvider())) == 404
+
+async def test_auditoria_entra_na_mesma_transacao_do_caso(auditoria):
+    """O helper não pode fazer commit próprio: caso, movimentação e auditoria vão juntos."""
+    provider = FakeProvider()
+    caso = await _abrir(provider)
+    await ctrl.concluir_etapa(caso["id"], RECEPCAO, "10.0.0.1", provider)
+    assert auditoria and all(r.get("commit") is False for r in auditoria)
+    assert {r["recurso"] for r in auditoria} == {f"caso:{caso['id']}"}
+    assert {r["categoria"] for r in auditoria} == {"NEGOCIO_CLINICO"}

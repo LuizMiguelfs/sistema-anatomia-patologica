@@ -117,6 +117,7 @@ async def _gravar(
         dados_anteriores=anteriores,
         dados_novos=novos,
         ip_origem=ip,
+        commit=False,  # grava no commit do controller, junto com a alteração (RN-04)
     )
 
 
