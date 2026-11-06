@@ -11,9 +11,9 @@ echo -e "${BLUE}==================================================${NC}"
 echo -e "${BLUE}   🚀 Iniciando Aplicação                         ${NC}"
 echo -e "${BLUE}==================================================${NC}"
 
-# 0. Limpeza de processos anteriores
-echo -e "${YELLOW}🧹 Limpando processos anteriores...${NC}"
-echo "Processos existentes não serão finalizados automaticamente."
+# 0. Processos anteriores (não são finalizados pelo script)
+echo -e "${YELLOW}ℹ️  Processos já em execução não são finalizados automaticamente.${NC}"
+echo "Se a porta estiver ocupada, encerre o processo anterior manualmente."
 
 # 1. Verificação das ferramentas necessárias
 echo -e "\n${YELLOW}[1/6] Verificando ferramentas do sistema...${NC}"
