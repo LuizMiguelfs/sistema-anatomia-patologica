@@ -1,334 +1,410 @@
+"""Autenticação SAP: AD/LDAP (identidade), autorização local (perfil) e sessão.
+
+Refresh usa busca de conta via AD com usuário de serviço, NUNCA bind sem senha.
+Sem autorização local ativa ou conta AD válida não se emite sessão.
+"""
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+import logging
 import os
-import jwt
-from ldap3 import Server, Connection, ALL, SUBTREE, SIMPLE
 import re
 import secrets
-from datetime import datetime, timedelta
-from abc import ABC, abstractmethod
+import ssl
+from urllib.parse import urlparse
+
+import jwt
+from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from dotenv import load_dotenv
+from ldap3 import ALL, SUBTREE, SIMPLE, Connection, Server, Tls
+from ldap3.core.exceptions import LDAPBindError, LDAPException
+from ldap3.utils.conv import escape_filter_chars
+from ldap3.utils.dn import parse_dn
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
 
-from ..resources.database import get_app_db_session
+from ..config import settings  # valida configurações na inicialização
+from ..models.audit_log import AuditLog
+from ..models.authorized_user import AuthorizedUser
 from ..models.refresh_token import RefreshToken
+from ..resources.database import get_app_db_session
 
 load_dotenv()
-
-# --- Configurações --- 
-JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-key-change-in-production")
-JWT_EXP_HOURS = int(os.getenv("JWT_EXP_HOURS", 24))
-REFRESH_TOKEN_EXP_DAYS = int(os.getenv("REFRESH_TOKEN_EXP_DAYS", 30))
+log = logging.getLogger(__name__)
+ENV = os.getenv("ENV", "development").lower()
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+JWT_EXP_HOURS = int(os.getenv("JWT_EXP_HOURS", "24"))  # legado; preferir ACCESS_TOKEN_MINUTES
+ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "15"))
+REFRESH_TOKEN_EXP_DAYS = int(os.getenv("REFRESH_TOKEN_EXP_DAYS", "30"))
+SESSION_REFRESH_HOURS = int(os.getenv("SESSION_REFRESH_HOURS", "12"))
+COOKIE_SECURE = ENV == "production" or os.getenv("REFRESH_COOKIE_SECURE", "false").lower() == "true"
+ROLES = frozenset({"RECEPCAO", "LABORATORIO", "RESIDENTE", "PRECEPTORIA", "CHEFIA"})
+ADMIN_GROUP = "GLO-SEC-HCPE-SETISD"  # Administração do framework, NÃO sinônimo de Chefia SAP.
+USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]{1,128}$")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
-# --- Interface e Implementações de Provedor de Autenticação ---
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def normalize_username(value: str) -> str:
+    if not isinstance(value, str):
+        raise HTTPException(401, "Credenciais inválidas")
+    user = value.strip()
+    domain = os.getenv("AD_DOMAIN", "EBSERHNET")
+    if "\\" in user:
+        supplied_domain, user = user.split("\\", 1)
+        if supplied_domain.casefold() != domain.casefold():
+            raise HTTPException(401, "Credenciais inválidas")
+    if not USERNAME_PATTERN.fullmatch(user):
+        raise HTTPException(401, "Credenciais inválidas")
+    return user.lower()
+
+
+def _hash_token(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _safe_groups(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return list(dict.fromkeys(item for item in value if isinstance(item, str) and len(item) <= 256))[:200]
+
+
+def _ldap_group_name(dn: str) -> str | None:
+    try:
+        for attribute, value, _separator in parse_dn(str(dn)):
+            if attribute.upper() == "CN":
+                return value
+    except (ValueError, TypeError, LDAPException):
+        return None
+    return None
+
+
+def _role_group_policy() -> dict[str, set[str]]:
+    """Se fornecido, restringe o perfil local a grupos AD autorizados pela instituição."""
+    raw = os.getenv("SAP_ROLE_GROUP_MAP", "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict) or not all(
+            role in ROLES and isinstance(groups, list) and groups
+            and all(isinstance(g, str) and g.strip() for g in groups)
+            for role, groups in parsed.items()
+        ):
+            raise ValueError("Mapa de grupos inválido")
+        if parsed and set(parsed) != ROLES:
+            raise ValueError("Mapa deve conter os cinco perfis, sem omissões")
+        return {role: {g.casefold() for g in groups} for role, groups in parsed.items()}
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError("SAP_ROLE_GROUP_MAP deve ser JSON {PERFIL: [GRUPO_AD]}") from exc
+
 
 class AuthProviderInterface(ABC):
-    """Interface para provedores de autenticação."""
     @abstractmethod
-    def authenticate_user(self, username, password) -> dict:
-        pass
+    def authenticate_user(self, username: str, password: str) -> dict: ...
 
     @abstractmethod
-    def search_user(self, username: str) -> dict:
-        pass
+    def search_user(self, username: str) -> dict: ...
+
 
 class MockAuthProvider(AuthProviderInterface):
-    """Provedor de autenticação mock para desenvolvimento offline."""
-    def authenticate_user(self, username, password) -> dict:
-        print("--- Using Mock Authentication ---")
-        if username == "admin" and password == "admin":
-            print(f"Authentication successful for mock user: {username}")
-            # O nome do grupo que o frontend usa para identificar administradores
-            admin_group = "GLO-SEC-HCPE-SETISD"
-            return {
-                "username": "admin",
-                "displayName": ["Mock Admin"],
-                "groups": [admin_group, "Users"],
-                "email": "admin@mock.com"
-            }
-        else:
-            print(f"Authentication failed for mock user: {username}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Invalid mock credentials"
-            )
+    """Somente desenvolvimento/testes; jamais disponibilizado em produção."""
+    _users = {
+        "admin": ("Administrador do Sistema", "admin@ebserh.gov.br", "SETISD / HC-UFPE"),
+        "joao.silva": ("João da Silva", "joao.silva@ebserh.gov.br", "UTI Adulto / HC-UFPE"),
+        "maria.souza": ("Maria Souza", "maria.souza@ebserh.gov.br", "Bloco Cirúrgico / HC-UFPE"),
+    }
 
     def search_user(self, username: str) -> dict:
-        """Busca simulada de usuário no AD para desenvolvimento/teste."""
-        clean_username = username.strip().lower()
-        mock_users = {
-            "admin": {
-                "exists": True,
-                "username": "admin",
-                "displayName": "Administrador do Sistema",
-                "email": "admin@ebserh.gov.br",
-                "department": "SETISD / HC-UFPE"
-            },
-            "joao.silva": {
-                "exists": True,
-                "username": "joao.silva",
-                "displayName": "João da Silva",
-                "email": "joao.silva@ebserh.gov.br",
-                "department": "UTI Adulto / HC-UFPE"
-            },
-            "maria.souza": {
-                "exists": True,
-                "username": "maria.souza",
-                "displayName": "Maria Souza",
-                "email": "maria.souza@ebserh.gov.br",
-                "department": "Bloco Cirúrgico / HC-UFPE"
-            },
-            "gestor.unidade": {
-                "exists": True,
-                "username": "gestor.unidade",
-                "displayName": "Gestor da Unidade",
-                "email": "gestor.unidade@ebserh.gov.br",
-                "department": "Diretoria de Enfermagem / HC-UFPE"
-            },
-            "medico.exemplo": {
-                "exists": True,
-                "username": "medico.exemplo",
-                "displayName": "Médico do Setor",
-                "email": "medico.exemplo@ebserh.gov.br",
-                "department": "Clínica Médica / HC-UFPE"
-            },
-            "enfermeiro.exemplo": {
-                "exists": True,
-                "username": "enfermeiro.exemplo",
-                "displayName": "Enfermeiro do Setor",
-                "email": "enfermeiro.exemplo@ebserh.gov.br",
-                "department": "UTI Neonatal / HC-UFPE"
-            },
-            "farmaceutico.exemplo": {
-                "exists": True,
-                "username": "farmaceutico.exemplo",
-                "displayName": "Farmacêutico do Setor",
-                "email": "farmaceutico.exemplo@ebserh.gov.br",
-                "department": "Farmácia Hospitalar / HC-UFPE"
-            }
+        username = normalize_username(username)
+        info = self._users.get(username)
+        if not info and "." in username:
+            info = (" ".join(x.capitalize() for x in username.split(".")),
+                    f"{username}@ebserh.gov.br", "Unidade Hospitalar / HC-UFPE")
+        return {
+            "exists": bool(info), "enabled": bool(info), "username": username,
+            "displayName": info[0] if info else "", "email": info[1] if info else "",
+            "department": info[2] if info else "", "title": "",
+            "groups": [ADMIN_GROUP, "Users"] if username == "admin" else [],
         }
 
-        if clean_username in mock_users:
-            return mock_users[clean_username]
-        
-        # Se for um formato 'nome.sobrenome', gera um mock dinâmico amigável
-        if "." in clean_username:
-            parts = clean_username.split(".")
-            formatted_name = " ".join([p.capitalize() for p in parts])
-            return {
-                "exists": True,
-                "username": clean_username,
-                "displayName": formatted_name,
-                "email": f"{clean_username}@ebserh.gov.br",
-                "department": "Unidade Hospitalar / HC-UFPE"
-            }
-        
-        return {
-            "exists": False,
-            "username": username,
-            "displayName": "",
-            "email": "",
-            "department": ""
-        }
+    def authenticate_user(self, username: str, password: str) -> dict:
+        username = normalize_username(username)
+        expected = os.getenv("MOCK_AUTH_PASSWORD", "")
+        if not expected:
+            raise HTTPException(503, "Mock exige MOCK_AUTH_PASSWORD definido no ambiente")
+        if username != "admin" or not secrets.compare_digest(password or "", expected):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciais inválidas")
+        info = self.search_user(username)
+        return _as_profile(info)
+
+
+def _as_profile(info: dict) -> dict:
+    return {
+        "username": info["username"], "groups": _safe_groups(info.get("groups", [])),
+        "displayName": [info.get("displayName", "")],
+        "email": [info.get("email", "")],
+        "department": [info.get("department", "")],
+        "title": [info.get("title", "")],
+    }
+
 
 class ActiveDirectoryAuthProvider(AuthProviderInterface):
-    """Provedor de autenticação real usando LDAP/Active Directory (ldap3)."""
     def __init__(self):
-        self.ad_url = os.getenv("AD_URL")
-        self.ad_basedn = os.getenv("AD_BASEDN")
-        self.ad_bind_user = os.getenv("AD_BIND_USER")
-        self.ad_bind_password = os.getenv("AD_BIND_PASSWORD")
-        if not self.ad_url or not self.ad_basedn:
-            raise RuntimeError("Active Directory is not configured. Check .env file.")
+        ad_url = os.getenv("AD_URL", "")
+        self.base_dn = os.getenv("AD_BASEDN", "")
+        self.bind_user = os.getenv("AD_BIND_USER", "")
+        self.bind_password = os.getenv("AD_BIND_PASSWORD", "")
+        self.domain = os.getenv("AD_DOMAIN", "EBSERHNET")
+        parsed = urlparse(ad_url)
+        if parsed.username or parsed.password:
+            raise RuntimeError("Credenciais não devem aparecer em AD_URL")
+        if parsed.scheme not in {"ldap", "ldaps"} or not parsed.hostname or not self.base_dn:
+            raise RuntimeError("AD_URL e AD_BASEDN inválidos")
+        if parsed.scheme != "ldaps":
+            raise RuntimeError("AD_URL deve usar LDAPS; binds em LDAP sem TLS foram bloqueados")
+        tls = Tls(validate=ssl.CERT_REQUIRED, ca_certs_file=os.getenv("AD_CA_CERT") or None)
+        self.server = Server(parsed.hostname, port=parsed.port or 636,
+                             use_ssl=True, tls=tls, get_info=ALL, connect_timeout=5)
 
-    def authenticate_user(self, username, password) -> dict:
-        print(f"--- Starting AD Authentication (ldap3) for user: {username} ---")
+    def _read_entry(self, conn, username: str) -> dict:
+        attributes = ["displayName", "mail", "department", "title", "memberOf", "userAccountControl"]
+        query = f"(&(objectClass=user)(sAMAccountName={escape_filter_chars(username)}))"
+        conn.search(self.base_dn, query, search_scope=SUBTREE, attributes=attributes, size_limit=2)
+        if len(conn.entries) != 1:
+            return {"exists": False, "enabled": False, "username": username,
+                    "displayName": "", "email": "", "department": "", "groups": []}
+        attributes = conn.entries[0].entry_attributes_as_dict
+
+        def value(name, default=""):
+            item = attributes.get(name, default)
+            return item[0] if isinstance(item, (list, tuple)) and item else (item or default)
+
+        group_dns = attributes.get("memberOf", []) or []
+        if not isinstance(group_dns, list):
+            group_dns = [group_dns]
+        groups = [name for dn in group_dns if (name := _ldap_group_name(str(dn)))]
         try:
-            server = Server(self.ad_url, get_info=ALL)
-            user_bind_dn = f"EBSERHNET\\{username}"
-            
-            # Autenticação inicial (Bind)
-            conn = Connection(server, user=user_bind_dn, password=password, authentication=SIMPLE, check_names=True, raise_exceptions=True)
-            conn.bind()
+            flags = int(value("userAccountControl", 2))
+        except (TypeError, ValueError):
+            flags = 2
+        return {
+            "exists": True, "enabled": not bool(flags & 2), "username": username,
+            "displayName": str(value("displayName", username)), "email": str(value("mail")),
+            "department": str(value("department")), "title": str(value("title")),
+            "groups": groups,
+        }
 
-            # Se chegamos aqui, o bind foi bem sucedido.
-            # Agora buscamos informações do usuário e seus grupos.
-            search_conn = conn
-            if self.ad_bind_user and self.ad_bind_password:
-                # Opcional: usar um usuário de serviço para buscas se o usuário logado tiver restrições
-                search_conn = Connection(server, user=self.ad_bind_user, password=self.ad_bind_password, authentication=SIMPLE, check_names=True, raise_exceptions=True)
-                search_conn.bind()
-
-            search_filter = f"(&(objectClass=user)(sAMAccountName={username}))"
-            search_conn.search(self.ad_basedn, search_filter, search_scope=SUBTREE, attributes=['*'])
-
-            if not search_conn.entries:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User found during bind but search returned no data.")
-
-            user_entry = search_conn.entries[0]
-            user_info = {"username": username}
-            groups = []
-
-            # Extração de atributos selecionados para evitar problemas de serialização (como datetime)
-            allowed_attrs = {
-                'displayName': 'displayName',
-                'mail': 'email',
-                'title': 'title',
-                'department': 'department',
-                'employeeNumber': 'employeeNumber',
-                'givenName': 'givenName',
-                'userPrincipalName': 'userPrincipalName'
-            }
-            
-            for attr_name in user_entry.entry_attributes:
-                value = user_entry[attr_name].value
-                attr_lower = attr_name.lower()
-                
-                if attr_lower == 'memberof':
-                    raw_groups = value if isinstance(value, list) else [value]
-                    for group_dn in raw_groups:
-                        match = re.match(r'CN=([^,]+)', group_dn)
-                        if match:
-                            groups.append(match.group(1))
-                    user_info['groups'] = groups
-                elif attr_name in allowed_attrs:
-                    # Garante que o valor seja SEMPRE uma lista de strings para o frontend
-                    if isinstance(value, list):
-                        user_info[allowed_attrs[attr_name]] = [str(v) for v in value]
-                    else:
-                        user_info[allowed_attrs[attr_name]] = [str(value)] if value is not None else []
-
-            # Garante que groups sempre exista
-            if 'groups' not in user_info:
-                user_info['groups'] = []
-
-            # Limpeza das conexões
-            if search_conn != conn:
-                search_conn.unbind()
-            conn.unbind()
-            
-            print(f"--- AD Authentication successful for user: {username}. ---")
-            return user_info
-
-        except Exception as e:
-            # Tratamento de erros específicos do ldap3 ou genéricos
-            error_str = str(e)
-            if "invalidCredentials" in error_str:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-            elif "server not available" in error_str.lower():
-                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AD server is down or unreachable")
-            else:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AD error: {e}")
+    def authenticate_user(self, username: str, password: str) -> dict:
+        username = normalize_username(username)
+        if not password:
+            raise HTTPException(401, "Credenciais inválidas")
+        user_conn = None
+        service_conn = None
+        try:
+            user_conn = Connection(self.server, user=f"{self.domain}\\{username}", password=password,
+                                   authentication=SIMPLE, auto_bind=True, raise_exceptions=True)
+            search_conn = user_conn
+            if self.bind_user and self.bind_password:
+                service_conn = Connection(self.server, user=self.bind_user,
+                                          password=self.bind_password, authentication=SIMPLE,
+                                          auto_bind=True, raise_exceptions=True)
+                search_conn = service_conn
+            info = self._read_entry(search_conn, username)
+            if not info["exists"] or not info["enabled"]:
+                raise HTTPException(401, "Credenciais inválidas")
+            return _as_profile(info)
+        except LDAPBindError:
+            raise HTTPException(401, "Credenciais inválidas") from None
+        except LDAPException:
+            log.warning("Falha de comunicação ao autenticar no AD")
+            raise HTTPException(503, "Autenticação corporativa indisponível") from None
+        finally:
+            if service_conn:
+                service_conn.unbind()
+            if user_conn:
+                user_conn.unbind()
 
     def search_user(self, username: str) -> dict:
-        """Busca dados de um usuário no AD pelo login (sAMAccountName) sem efetuar login dele."""
-        print(f"--- Searching AD User info (ldap3) for: {username} ---")
+        username = normalize_username(username)
+        if not (self.bind_user and self.bind_password):
+            raise HTTPException(503, "Conta de serviço AD necessária para consulta/renovação")
+        conn = None
         try:
-            server = Server(self.ad_url, get_info=ALL)
-            if self.ad_bind_user and self.ad_bind_password:
-                conn = Connection(server, user=self.ad_bind_user, password=self.ad_bind_password, authentication=SIMPLE, check_names=True, raise_exceptions=True)
-            else:
-                conn = Connection(server, authentication=SIMPLE, check_names=True, raise_exceptions=True)
-            
-            conn.bind()
-            search_filter = f"(&(objectClass=user)(sAMAccountName={username}))"
-            conn.search(self.ad_basedn, search_filter, search_scope=SUBTREE, attributes=['displayName', 'mail', 'department', 'title', 'sAMAccountName'])
-
-            if not conn.entries:
+            conn = Connection(self.server, user=self.bind_user, password=self.bind_password,
+                              authentication=SIMPLE, auto_bind=True, raise_exceptions=True)
+            return self._read_entry(conn, username)
+        except LDAPException:
+            log.warning("Falha ao consultar conta no AD")
+            raise HTTPException(503, "Consulta corporativa indisponível") from None
+        finally:
+            if conn:
                 conn.unbind()
-                return {
-                    "exists": False,
-                    "username": username,
-                    "displayName": "",
-                    "email": "",
-                    "department": ""
-                }
 
-            entry = conn.entries[0]
-            display_name = str(entry.displayName.value) if 'displayName' in entry and entry.displayName.value else username
-            email = str(entry.mail.value) if 'mail' in entry and entry.mail.value else ""
-            department = str(entry.department.value) if 'department' in entry and entry.department.value else "HC-UFPE / EBSERH"
-
-            conn.unbind()
-            return {
-                "exists": True,
-                "username": username,
-                "displayName": display_name,
-                "email": email,
-                "department": department
-            }
-        except Exception as e:
-            print(f"Error searching AD for user {username}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Falha ao consultar Active Directory: {e}"
-            )
-
-# --- AuthHandler Principal ---
 
 class AuthHandler:
     def __init__(self):
-        # Lógica de troca: decide qual provedor usar na inicialização
-        ad_url = os.getenv("AD_URL")
-        if ad_url and "ad.domain.local" not in ad_url:
-            print("INFO: Using Active Directory authentication.")
+        if ACCESS_TOKEN_MINUTES < 1 or REFRESH_TOKEN_EXP_DAYS < 1 or SESSION_REFRESH_HOURS < 1:
+            raise RuntimeError("Durações de sessão inválidas")
+        if len(JWT_SECRET) < 32:
+            raise RuntimeError("JWT_SECRET com pelo menos 32 caracteres é obrigatório")
+        if ENV == "production":
+            if not JWT_SECRET or len(JWT_SECRET) < 32 or JWT_SECRET in {
+                "super-secret-key-change-in-production", "SUA_CHAVE_SECRETA_SUPER_FORTE_AQUI_ALTERAR_EM_PRODUCAO"
+            }:
+                raise RuntimeError("JWT_SECRET seguro é obrigatório em produção")
+            if not os.getenv("AD_URL"):
+                raise RuntimeError("AD_URL é obrigatório em produção (Mock proibido)")
+            if not (os.getenv("AD_BIND_USER") and os.getenv("AD_BIND_PASSWORD")):
+                raise RuntimeError("Conta de serviço AD obrigatória em produção para revalidação")
+        _role_group_policy()  # valida JSON durante startup
+        if os.getenv("AD_URL"):
             self.provider: AuthProviderInterface = ActiveDirectoryAuthProvider()
+        elif ENV in {"development", "test", "testing"} and os.getenv("AUTH_ALLOW_MOCK", "").lower() == "true":
+            self.provider = MockAuthProvider()
         else:
-            print("WARNING: AD environment variables not found or template default. Using Mock authentication.")
-            self.provider: AuthProviderInterface = MockAuthProvider()
+            raise RuntimeError("Mock exige AUTH_ALLOW_MOCK=true e ambiente não produtivo")
+        if isinstance(self.provider, MockAuthProvider):
+            log.warning("Autenticação Mock ativada exclusivamente para desenvolvimento")
 
-    def authenticate_user(self, username, password):
+    def authenticate_user(self, username: str, password: str) -> dict:
         return self.provider.authenticate_user(username, password)
 
     def search_ad_user(self, username: str) -> dict:
         return self.provider.search_user(username)
 
-    def create_access_token(self, data: dict, expires_delta: timedelta | None = None):
-        to_encode = data.copy()
-        if 'username' in to_encode:
-            to_encode['sub'] = to_encode['username']
-        
-        # Use o tempo Unix (timestamp) para garantir serialização JSON
-        expire = datetime.utcnow() + (expires_delta or timedelta(hours=JWT_EXP_HOURS))
-        to_encode.update({"exp": int(expire.timestamp())})
-        
+    async def authorize_user(self, username: str, groups: list[str], db: AsyncSession) -> AuthorizedUser:
+        username = normalize_username(username)
+        result = await db.execute(select(AuthorizedUser).where(AuthorizedUser.username == username))
+        local_user = result.scalar_one_or_none()
+        if not local_user or not local_user.active or local_user.role not in ROLES:
+            raise HTTPException(403, "Usuário não autorizado para o SAP")
+        groups_for_role = _role_group_policy().get(local_user.role)
+        if groups_for_role and not groups_for_role.intersection(g.casefold() for g in groups):
+            raise HTTPException(403, "Perfil sem grupo corporativo necessário")
+        return local_user
+
+    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
+        username = normalize_username(data.get("username", data.get("sub", "")))
+        role = data.get("role")
+        if role not in ROLES:
+            raise ValueError("Perfil inválido para JWT")
+        now = datetime.now(timezone.utc)
+        claims = {"sub": username, "username": username, "role": role,
+                  "groups": _safe_groups(data.get("groups", [])), "typ": "access",
+                  "iat": int(now.timestamp()),
+                  "exp": int((now + (expires_delta or timedelta(minutes=ACCESS_TOKEN_MINUTES))).timestamp())}
+        # Apenas dados profissionais mínimos do PRÓPRIO usuário, sem dados clínicos.
+        for key in ("displayName", "department", "title", "email"):
+            item = data.get(key, "")
+            value = item[0] if isinstance(item, list) and item else item
+            claims[key] = [str(value)[:256]] if isinstance(value, str) and value else []
         if not JWT_SECRET:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="JWT_SECRET not configured")
-        return jwt.encode(to_encode, JWT_SECRET, algorithm="HS256")
+            raise RuntimeError("JWT_SECRET precisa estar configurado")
+        return jwt.encode(claims, JWT_SECRET, algorithm="HS256")
 
-    async def create_refresh_token(self, user_id: str, groups: list, db: AsyncSession) -> str:
-        refresh_token_string = secrets.token_urlsafe(64)
-        expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXP_DAYS)
-        new_refresh_token = RefreshToken(user_id=user_id, token=refresh_token_string, groups=groups, expires_at=expires_at)
-        db.add(new_refresh_token)
-        await db.commit()
-        return refresh_token_string
-
-    async def verify_refresh_token(self, refresh_token: str, db: AsyncSession):
-        stmt = select(RefreshToken).where(RefreshToken.token == refresh_token)
-        result = await db.execute(stmt)
-        token_obj = result.scalar_one_or_none()
-        if not token_obj or token_obj.expires_at < datetime.utcnow():
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
-        return token_obj
-
-    async def invalidate_refresh_token(self, refresh_token: str, db: AsyncSession):
-        stmt = delete(RefreshToken).where(RefreshToken.token == refresh_token)
-        await db.execute(stmt)
-        await db.commit()
-
-    def decode_token(self, token: str = Depends(oauth2_scheme)):
+    async def create_refresh_token(self, user_id: str, groups: list, db: AsyncSession,
+                                   remember_me: bool = False, ip: str | None = None) -> str:
+        """Cria token e registra evento de segurança na mesma transação."""
+        raw = secrets.token_urlsafe(48)
+        ttl = timedelta(days=REFRESH_TOKEN_EXP_DAYS) if remember_me else timedelta(hours=SESSION_REFRESH_HOURS)
+        db.add(RefreshToken(user_id=normalize_username(user_id), token=_hash_token(raw),
+                            groups={"remember_me": bool(remember_me)}, expires_at=now_utc() + ttl))
+        db.add(AuditLog(usuario=user_id, categoria="SEGURANCA", acao="LOGIN",
+                        recurso="sessao", dados_anteriores=None,
+                        dados_novos='{"sessao":"criada"}', ip_origem=ip))
         try:
-            if not JWT_SECRET:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="JWT_SECRET not configured")
-            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-            return payload
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
-        except jwt.InvalidTokenError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        return raw
 
-# Instância única que será usada em toda a aplicação
+    async def verify_refresh_token(self, raw: str, db: AsyncSession) -> RefreshToken:
+        if not raw or len(raw) > 512:
+            raise HTTPException(401, "Sessão expirada ou inválida")
+        result = await db.execute(select(RefreshToken).where(RefreshToken.token == _hash_token(raw)))
+        token = result.scalar_one_or_none()
+        if not token or token.expires_at <= now_utc():
+            raise HTTPException(401, "Sessão expirada ou inválida")
+        return token
+
+    async def rotate_refresh_token(self, raw: str, db: AsyncSession, username: str,
+                                   remember_me: bool, ip: str | None = None) -> str:
+        """Apenas uma requisição concorrente consome cada refresh token."""
+        raw_new = secrets.token_urlsafe(48)
+        consumed = await db.execute(
+            delete(RefreshToken).where(RefreshToken.token == _hash_token(raw),
+                                       RefreshToken.user_id == username,
+                                       RefreshToken.expires_at > now_utc())
+            .returning(RefreshToken.user_id)
+        )
+        if consumed.scalar_one_or_none() is None:
+            await db.rollback()
+            raise HTTPException(401, "Sessão já utilizada ou expirada")
+        ttl = timedelta(days=REFRESH_TOKEN_EXP_DAYS) if remember_me else timedelta(hours=SESSION_REFRESH_HOURS)
+        db.add(RefreshToken(user_id=username, token=_hash_token(raw_new),
+                            groups={"remember_me": remember_me}, expires_at=now_utc() + ttl))
+        db.add(AuditLog(usuario=username, categoria="SEGURANCA", acao="RENOVAR_SESSAO",
+                        recurso="sessao", dados_anteriores='{"sessao":"anterior"}',
+                        dados_novos='{"sessao":"renovada"}', ip_origem=ip))
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        return raw_new
+
+    async def invalidate_refresh_token(self, raw: str, db: AsyncSession, ip: str | None = None):
+        if not raw or len(raw) > 512:
+            return
+        result = await db.execute(select(RefreshToken.user_id).where(RefreshToken.token == _hash_token(raw)))
+        user_id = result.scalar_one_or_none()
+        if user_id:
+            await db.execute(delete(RefreshToken).where(RefreshToken.token == _hash_token(raw)))
+            db.add(AuditLog(usuario=user_id, categoria="SEGURANCA", acao="LOGOUT",
+                            recurso="sessao", dados_anteriores='{"sessao":"ativa"}',
+                            dados_novos='{"sessao":"revogada"}', ip_origem=ip))
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+
+    async def decode_token(self, token: str = Depends(oauth2_scheme),
+                           db: AsyncSession = Depends(get_app_db_session)) -> dict:
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"],
+                                 options={"require": ["exp", "iat", "sub", "typ"]})
+            if payload.get("typ") != "access" or not isinstance(payload.get("groups"), list):
+                raise jwt.InvalidTokenError()
+            username = normalize_username(payload["sub"])
+        except (jwt.InvalidTokenError, HTTPException):
+            raise HTTPException(401, "Sessão inválida ou expirada") from None
+        local_user = await self.authorize_user(username, payload["groups"], db)
+        # Papéis revogados/alterados no banco têm efeito imediato, sem aguardar expiração do JWT.
+        return {"username": username, "role": local_user.role, "groups": payload["groups"],
+                "displayName": payload.get("displayName") or [username],
+                "department": payload.get("department", []),
+                "email": payload.get("email", []),
+                "title": payload.get("title", [])}
+
+    def require_roles(self, *roles: str):
+        """Usar como Depends(auth_handler.require_roles('RECEPCAO', ...)) em rotas SAP."""
+        if not roles or any(role not in ROLES for role in roles):
+            raise ValueError("Lista de perfis RBAC inválida")
+
+        async def dependency(current_user: dict = Depends(self.decode_token)):
+            if current_user.get("role") not in roles:
+                raise HTTPException(403, "Sem permissão para esta operação")
+            return current_user
+
+        return dependency
+
+
 auth_handler = AuthHandler()

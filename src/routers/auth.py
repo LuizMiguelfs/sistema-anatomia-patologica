@@ -1,111 +1,133 @@
-# src/routers/auth.py
+"""Endpoints públicos de sessão e endpoint autenticado de perfil.
+
+Cookie HttpOnly restrito a /api; access token fica somente em memória no frontend.
+"""
+import os
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, Response, Request, status, Form
+from urllib.parse import urlparse
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from ..auth.auth import auth_handler, JWT_EXP_HOURS, REFRESH_TOKEN_EXP_DAYS
+from ..auth.auth import (
+    ACCESS_TOKEN_MINUTES, COOKIE_SECURE, ENV, REFRESH_TOKEN_EXP_DAYS,
+    auth_handler,
+)
 from ..resources.database import get_app_db_session
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api", tags=["Authentication"])
+COOKIE_NAME = "refresh_token"
+COOKIE_PATH = "/api"
+
+
+def _cookie(response: Response, token: str, remember_me: bool) -> None:
+    """Sem 'lembrar': cookie de sessão, expira quando o navegador encerra."""
+    kwargs = {"key": COOKIE_NAME, "value": token, "httponly": True,
+              "secure": COOKIE_SECURE, "samesite": "lax", "path": COOKIE_PATH}
+    if remember_me:
+        kwargs["max_age"] = REFRESH_TOKEN_EXP_DAYS * 86400
+    response.set_cookie(**kwargs)
+
+
+def _clear_cookie(response: Response) -> None:
+    response.delete_cookie(COOKIE_NAME, path=COOKIE_PATH, httponly=True,
+                           secure=COOKIE_SECURE, samesite="lax")
+
+
+def _validate_origin(request: Request) -> None:
+    """Verificação complementar à proteção SameSite contra CSRF nas rotas de cookie."""
+    origin = request.headers.get("origin")
+    if not origin:
+        return  # Clientes de API sem Origin, não autenticados por cookie no navegador.
+    allowed = {s.strip().rstrip("/") for s in os.getenv("ALLOWED_ORIGINS", "").split(",") if s.strip()}
+    # Host é usado apenas em desenvolvimento; em produção usar a lista explícita.
+    if ENV != "production":
+        allowed.add(f"{request.url.scheme}://{request.url.netloc}")
+        allowed.update({"http://localhost:5173", "http://127.0.0.1:5173"})
+    if origin.rstrip("/") not in allowed:
+        raise HTTPException(403, "Origem não autorizada")
+
+
+def _ip(request: Request) -> str | None:
+    # Não confiar em X-Forwarded-For sem validação de proxy de confiança.
+    return request.client.host if request.client else None
+
 
 @router.post("/login")
 async def login(
+    request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     remember_me: bool = Form(False),
-    db: AsyncSession = Depends(get_app_db_session)
+    db: AsyncSession = Depends(get_app_db_session),
 ):
-    """
-    Logs in a user, returns a JWT access token, and optionally sets an HttpOnly refresh token cookie.
-    """
+    _validate_origin(request)
     try:
-        user = await run_in_threadpool(auth_handler.authenticate_user, form_data.username, form_data.password)
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {e}")
+        user = await run_in_threadpool(auth_handler.authenticate_user,
+                                       form_data.username, form_data.password)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, "Serviço de autenticação indisponível") from None
 
-    access_token_expires = timedelta(minutes=15) if remember_me else timedelta(hours=JWT_EXP_HOURS)
-    access_token = auth_handler.create_access_token(
-       data=user,
-       expires_delta=access_token_expires
-   )
+    authorized = await auth_handler.authorize_user(user["username"], user.get("groups", []), db)
+    token = auth_handler.create_access_token({**user, "role": authorized.role})
+    refresh = await auth_handler.create_refresh_token(user_id=user["username"],
+                                                      groups=user.get("groups", []),
+                                                      remember_me=remember_me,
+                                                      db=db, ip=_ip(request))
+    _cookie(response, refresh, remember_me)
+    return {"access_token": token, "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60}
 
-    if remember_me:
-        refresh_token = await auth_handler.create_refresh_token(user_id=user["username"], groups=user["groups"], db=db)
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            samesite="lax",
-            secure=True, # Should be True in production with HTTPS
-            max_age=REFRESH_TOKEN_EXP_DAYS * 24 * 60 * 60 # Convert days to seconds
-        )
-
-    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/token/refresh")
-async def refresh_token(request: Request, response: Response, db: AsyncSession = Depends(get_app_db_session)):
-    """
-    Refreshes the access token using a valid refresh token from an HttpOnly cookie.
-    """
-    refresh_token = request.cookies.get("refresh_token")
-    if not refresh_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token not found")
+async def refresh_token(request: Request, response: Response,
+                        db: AsyncSession = Depends(get_app_db_session)):
+    _validate_origin(request)
+    raw = request.cookies.get(COOKIE_NAME)
+    if not raw:
+        raise HTTPException(401, "Sessão não encontrada")
+    token_db = await auth_handler.verify_refresh_token(raw, db)
+    username = token_db.user_id
+    remember_me = bool((token_db.groups or {}).get("remember_me", False)) if isinstance(token_db.groups, dict) else False
 
-    token_obj = await auth_handler.verify_refresh_token(refresh_token, db)
-    # Re-fetch full user data to ensure the new token has all AD attributes
+    # Revalidação real com busca AD de conta ativa; não repete bind com senha None.
+    identity = await run_in_threadpool(auth_handler.search_ad_user, username)
+    if not identity.get("exists") or not identity.get("enabled"):
+        await auth_handler.invalidate_refresh_token(raw, db, ip=_ip(request))
+        _clear_cookie(response)
+        raise HTTPException(401, "Conta não disponível para renovação")
     try:
-       user_full_info = await run_in_threadpool(auth_handler.authenticate_user, token_obj.user_id, None) # Pass None for password as we are re-authenticating
-    except HTTPException as e:
-        # Handle cases where the user might not exist in AD anymore
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Failed to re-authenticate user: {e.detail}")
+        authorized = await auth_handler.authorize_user(username, identity.get("groups", []), db)
+    except HTTPException as exc:
+        # Usuário/perfil removido: revoga a sessão antiga para impedir reutilização
+        # caso a autorização seja concedida novamente no futuro.
+        if exc.status_code == 403:
+            await auth_handler.invalidate_refresh_token(raw, db, ip=_ip(request))
+            _clear_cookie(response)
+        raise
+    new_refresh = await auth_handler.rotate_refresh_token(raw, db, username, remember_me, ip=_ip(request))
+    new_access = auth_handler.create_access_token({
+        **identity, "username": username, "role": authorized.role,
+        "groups": identity.get("groups", []),
+    }, expires_delta=timedelta(minutes=ACCESS_TOKEN_MINUTES))
+    _cookie(response, new_refresh, remember_me)
+    return {"access_token": new_access, "token_type": "bearer", "expires_in": ACCESS_TOKEN_MINUTES * 60}
 
-    # Invalidate the old refresh token (optional: implement rotation for better security)
-    await auth_handler.invalidate_refresh_token(refresh_token, db)
-
-    # Create a new access token (short-lived)
-    new_access_token = auth_handler.create_access_token(
-        data=user_full_info,
-        expires_delta=timedelta(minutes=15)
-    )
-
-    # Create a new refresh token and set it as a new HttpOnly cookie
-
-    new_refresh_token = await auth_handler.create_refresh_token(
-        user_id=user_full_info["username"], 
-        groups=user_full_info.get("groups", []), 
-        db=db
-    )
-
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        samesite="lax",
-        secure=True, # Should be True in production with HTTPS
-        max_age=REFRESH_TOKEN_EXP_DAYS * 24 * 60 * 60
-    )
-
-    return {"access_token": new_access_token, "token_type": "bearer"}
 
 @router.post("/logout")
-async def logout(response: Response, request: Request, db: AsyncSession = Depends(get_app_db_session)):
-    """
-    Logs out the user by invalidating the refresh token and clearing the HttpOnly cookie.
-    """
-    refresh_token = request.cookies.get("refresh_token")
-    if refresh_token:
-        await auth_handler.invalidate_refresh_token(refresh_token, db)
-    
-    response.delete_cookie(key="refresh_token", httponly=True, samesite="lax", secure=True)
-    return {"message": "Logged out successfully"}
+async def logout(request: Request, response: Response,
+                 db: AsyncSession = Depends(get_app_db_session)):
+    _validate_origin(request)
+    raw = request.cookies.get(COOKIE_NAME)
+    if raw:
+        await auth_handler.invalidate_refresh_token(raw, db, ip=_ip(request))
+    _clear_cookie(response)
+    return {"message": "Sessão encerrada"}
+
 
 @router.get("/users/me")
 async def read_users_me(current_user: dict = Depends(auth_handler.decode_token)):
-    """
-    Returns the current user's information.
-    """
     return current_user
