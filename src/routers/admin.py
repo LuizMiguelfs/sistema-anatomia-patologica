@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import List
+from starlette.concurrency import run_in_threadpool
 
 from ..auth.auth import auth_handler
 
@@ -39,5 +40,5 @@ async def search_ad_user(username: str, current_user: dict = Depends(verify_admi
     Busca e valida um usuário no Active Directory (ou Mock) pelo login de rede.
     Restrito a administradores do sistema.
     """
-    res = auth_handler.search_ad_user(username)
+    res = await run_in_threadpool(auth_handler.search_ad_user, username)
     return ADUserSearchResponse(**res)

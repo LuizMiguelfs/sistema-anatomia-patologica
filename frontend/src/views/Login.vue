@@ -1,104 +1,82 @@
 <template>
-  <div class="w-full max-w-md">
+  <div class="w-full">
     <Card>
       <template #header>
-        <h1 class="text-xl font-semibold text-center">Login</h1>
+        <h1 class="text-xl font-semibold text-center">Acesso ao Serviço de Anatomia Patológica</h1>
       </template>
-      <form @submit.prevent="handleLogin">
-        <div class="mb-4">
-          <label class="block text-sm font-bold mb-2" for="username">
-            Usuário
-          </label>
-          <input v-model="username" class="shadow-inner appearance-none border rounded w-full py-2 px-3 leading-tight focus:outline-none focus:shadow-outline" id="username" type="text" placeholder="E.g., EBSERHNET\\user">
+      <form @submit.prevent="handleLogin" class="space-y-5">
+        <div>
+          <label for="username" class="block text-sm font-semibold mb-2">Usuário de rede</label>
+          <input id="username" v-model.trim="username" autocomplete="username" required
+            class="border rounded w-full py-2 px-3" placeholder="usuario ou EBSERHNET\usuario" />
         </div>
-        <div class="mb-6">
-          <label class="block text-sm font-bold mb-2" for="password">
-            Senha
-          </label>
+        <div>
+          <label for="password" class="block text-sm font-semibold mb-2">Senha corporativa</label>
           <div class="relative">
-            <input v-model="password" class="shadow-inner appearance-none border rounded w-full py-2 px-3 pr-10 leading-tight focus:outline-none focus:shadow-outline" id="password" :type="passwordFieldType" placeholder="******************">
-            <button type="button" @click="togglePasswordVisibility" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500">
-              <component :is="passwordFieldType === 'password' ? EyeIcon : EyeSlashIcon" class="h-5 w-5" />
+            <input id="password" v-model="password" autocomplete="current-password" required
+              :type="showPassword ? 'text' : 'password'" class="border rounded w-full py-2 px-3 pr-24" />
+            <button type="button" class="absolute right-2 top-2 text-sm text-gray-600"
+              :aria-label="showPassword ? 'Ocultar senha' : 'Mostrar senha'" @click="showPassword = !showPassword">
+              {{ showPassword ? 'Ocultar' : 'Mostrar' }}
             </button>
           </div>
         </div>
-        <div class="mb-6">
-          <label class="flex items-center">
-            <input type="checkbox" v-model="rememberMe" class="form-checkbox h-5 w-5 text-orange-600">
-            <span class="ml-2 text-sm">Lembrar de mim</span>
-          </label>
-        </div>
-        <div class="flex items-center justify-center space-x-4">
-          <Button type="button" variant="secondary" @click="clearForm" class="w-1/2 bg-gray-500 hover:bg-gray-600">
-            <template #icon>
-              <XCircleIcon class="h-5 w-5" />
-            </template>
-            Limpar
-          </Button>
-          <Button type="submit" variant="primary" :disabled="loading" class="w-1/2">
-            <template #icon>
-              <ArrowRightOnRectangleIcon class="h-5 w-5" />
-            </template>
-            Entrar
-          </Button>
-        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input v-model="rememberMe" type="checkbox" /> Manter acesso neste navegador
+        </label>
+        <p class="text-xs text-gray-600">Utilize apenas sua conta institucional. O acesso depende de autorização do setor.</p>
+        <Button type="submit" variant="primary" :disabled="loading || !username || !password" class="w-full">
+          {{ loading ? 'Autenticando...' : 'Entrar' }}
+        </Button>
       </form>
     </Card>
-    <div v-if="error" class="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-      <strong class="font-bold">Erro: </strong>
-      <span class="block sm:inline">{{ error }}</span>
-    </div>
-
-    <!-- Rodapé de Versão -->
-    <div class="mt-6 text-center text-xs text-gray-400 space-y-1">
-      <p class="font-semibold text-gray-300">{{ HOSPITAL_NAME }}</p>
-      <p class="text-gray-400">{{ DEPARTMENT_NAME }} | Versão {{ APP_VERSION }}</p>
+    <p v-if="error" role="alert" aria-live="polite" class="mt-4 border border-red-300 bg-red-50 text-red-800 rounded px-4 py-3 text-sm">
+      {{ error }}
+    </p>
+    <div class="mt-6 text-center text-xs text-gray-300 space-y-1">
+      <p>{{ HOSPITAL_NAME }}</p>
+      <p>{{ DEPARTMENT_NAME }} | Versão {{ APP_VERSION }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import Card from '../components/Card.vue';
 import Button from '../components/Button.vue';
-import { ArrowRightOnRectangleIcon, EyeIcon, EyeSlashIcon, XCircleIcon } from '@heroicons/vue/24/outline';
 import { APP_VERSION, HOSPITAL_NAME, DEPARTMENT_NAME } from '../config/version';
 
 const username = ref('');
 const password = ref('');
 const rememberMe = ref(false);
-const error = ref('');
+const showPassword = ref(false);
 const loading = ref(false);
-const passwordVisible = ref(false);
-
+const error = ref('');
+const auth = useAuthStore();
 const router = useRouter();
-const authStore = useAuthStore();
+const route = useRoute();
 
-const passwordFieldType = computed(() => passwordVisible.value ? 'text' : 'password');
-
-const togglePasswordVisibility = () => {
-  passwordVisible.value = !passwordVisible.value;
-};
-
-const clearForm = () => {
-  username.value = '';
-  password.value = '';
-  rememberMe.value = false;
-  error.value = '';
-};
-
-const handleLogin = async () => {
+async function handleLogin() {
+  if (loading.value) return;
   loading.value = true;
   error.value = '';
   try {
-    await authStore.login(username.value, password.value, rememberMe.value);
-    await router.push('/');
+    await auth.login(username.value, password.value, rememberMe.value);
+    password.value = '';
+    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
+      && !route.query.redirect.startsWith('//') ? route.query.redirect : '/';
+    await router.replace(redirect);
   } catch (e: any) {
-    error.value = e.response?.data?.detail || e.message || 'An unknown error occurred';
+    const status = e?.response?.status;
+    error.value = status === 401 ? 'Usuário ou senha inválidos.'
+      : status === 403 ? 'Conta sem autorização para o SAP. Contate a gestão do setor.'
+      : status === 503 ? 'Autenticação institucional indisponível. Tente novamente mais tarde.'
+      : 'Não foi possível iniciar a sessão.';
   } finally {
+    password.value = '';
     loading.value = false;
   }
-};
+}
 </script>
