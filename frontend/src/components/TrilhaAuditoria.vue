@@ -194,34 +194,44 @@ const comparacao = computed<LinhaComparacao[]>(() => {
   });
 });
 
+/** True para objeto simples (não nulo e não lista). */
 function ehObjeto(valor: unknown): valor is Record<string, unknown> {
   return typeof valor === 'object' && valor !== null && !Array.isArray(valor);
 }
 
+/** Valor de um campo para a tabela antes/depois ('—' quando vazio). */
 function formatarValor(valor: unknown): string {
   if (valor === undefined || valor === null || valor === '') return '—';
   return typeof valor === 'object' ? JSON.stringify(valor) : String(valor);
 }
 
+/** Conteúdo bruto do antes/depois quando não é objeto. */
 function formatarJson(valor: unknown): string {
   if (valor === null || valor === undefined) return '—';
   return typeof valor === 'string' ? valor : JSON.stringify(valor, null, 2);
 }
 
+/** Data/hora no formato local (pt-BR). */
 function formatarDataHora(iso: string): string {
   const data = new Date(iso);
   return Number.isNaN(data.getTime()) ? iso : data.toLocaleString('pt-BR');
 }
 
+/** Rótulo legível da categoria de auditoria. */
 function rotuloCategoria(valor: string): string {
   return categorias.find((c) => c.valor === valor)?.rotulo || valor;
 }
 
+/** Mensagem `detail` da API ou a mensagem padrão. */
 function mensagemErro(error: any, padrao: string): string {
   const detail = error?.response?.data?.detail;
   return typeof detail === 'string' ? detail : padrao;
 }
 
+/**
+ * Busca a página atual da trilha com os filtros preenchidos e o fuso do navegador.
+ * Respostas fora de ordem são descartadas (só vale a última requisição).
+ */
 async function carregar() {
   const id = ++requisicaoAtual;
   carregando.value = true;
@@ -247,21 +257,25 @@ async function carregar() {
   }
 }
 
+/** Aplica os filtros a partir da primeira página. */
 function buscar() {
   offset.value = 0;
   carregar();
 }
 
+/** Limpa os filtros e busca de novo. */
 function limpar() {
   Object.assign(filtros, filtrosVazios());
   buscar();
 }
 
+/** Avança (+1) ou volta (-1) uma página. */
 function mudarPagina(delta: number) {
   offset.value = Math.max(0, offset.value + delta * TAMANHO_PAGINA);
   carregar();
 }
 
+/** Abre o modal de antes/depois do registro clicado. */
 function abrirDetalhe(id: number | string) {
   detalhe.value = registros.value.find((r) => r.id === Number(id)) || null;
 }

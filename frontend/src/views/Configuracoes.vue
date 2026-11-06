@@ -299,6 +299,7 @@ async function carregarUsuarios() {
   }
 }
 
+/** Abre o modal de inclusão com o formulário limpo. */
 function abrirInclusao() {
   novoLogin.value = '';
   novoPerfil.value = 'RECEPCAO';
@@ -307,6 +308,7 @@ function abrirInclusao() {
   mostrarInclusao.value = true;
 }
 
+/** Fecha o modal de inclusão. */
 function fecharInclusao() {
   mostrarInclusao.value = false;
 }
@@ -332,6 +334,7 @@ async function consultarAD() {
   }
 }
 
+/** Inclui o login consultado no AD com o perfil escolhido e recarrega a lista. */
 async function salvarInclusao() {
   if (!resultadoAD.value) return;
   salvando.value = true;
@@ -347,11 +350,13 @@ async function salvarInclusao() {
   }
 }
 
+/** Abre o modal de troca de perfil já com o perfil atual selecionado. */
 function abrirTrocaPerfil(u: UsuarioSap) {
   trocaPerfil.value = u;
   perfilEscolhido.value = u.perfil;
 }
 
+/** Grava o novo perfil (o backend recusa o próprio usuário) e recarrega a lista. */
 async function salvarPerfil() {
   if (!trocaPerfil.value) return;
   salvando.value = true;
@@ -367,6 +372,7 @@ async function salvarPerfil() {
   }
 }
 
+/** Inativa ou reativa o acesso confirmado no modal e recarrega a lista. */
 async function salvarSituacao() {
   const alvo = confirmacao.value;
   if (!alvo) return;
