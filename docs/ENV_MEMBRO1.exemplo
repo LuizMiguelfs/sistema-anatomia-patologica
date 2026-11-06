@@ -1,0 +1,22 @@
+# Acrescentar ao .env, sem comitar. NUNCA inserir dados reais neste exemplo.
+# Os parâmetros JWT_SECRET e APP_DB_URL do framework original continuam necessários.
+ENV=development
+AUTH_ALLOW_MOCK=true  # Apenas desenvolvimento offline; NUNCA produção
+MOCK_AUTH_PASSWORD=SUBSTITUIR_POR_SENHA_DE_TESTE_LOCAL
+JWT_SECRET=SUBSTITUIR_POR_SEGREDO_ALEATORIO_COM_32_OU_MAIS_BYTES
+ACCESS_TOKEN_MINUTES=15
+SESSION_REFRESH_HOURS=12
+REFRESH_TOKEN_EXP_DAYS=30
+REFRESH_COOKIE_SECURE=false
+AD_DOMAIN=EBSERHNET
+# Produção exige LDAPS com certificado confiável e conta de consulta AD:
+# AD_URL=ldaps://CONTROLADOR_AD_OFICIAL:636
+# AD_BASEDN=DC=DOMINIO,DC=LOCAL
+# AD_BIND_USER=DOMINIO\CONTA_SERVICO
+# AD_BIND_PASSWORD=SEGREDO_EXTERNO
+# AD_CA_CERT=/etc/ssl/certs/ca-institucional.pem  # opcional se CA já confiável no sistema
+# ALLOWED_ORIGINS=https://HOST_APROVADO_DO_SAP
+# APP_DB_URL=sqlite+aiosqlite:///data/app.db
+# Opcional: grupos aprovados pela Chefia/SETISD, como JSON.
+# Sem mapa, a autorização depende APENAS do cadastro local + autenticação AD.
+# SAP_ROLE_GROUP_MAP={"RECEPCAO":["AD_RECEPCAO"],"LABORATORIO":["AD_LAB"],"RESIDENTE":["AD_RESIDENTES"],"PRECEPTORIA":["AD_PRECEPTORES"],"CHEFIA":["AD_CHEFIA"]}

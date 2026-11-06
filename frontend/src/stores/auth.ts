@@ -1,115 +1,102 @@
+import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import type { Router } from 'vue-router';
 import api from '../services/api';
 
-interface User {
+export type SapRole = 'RECEPCAO' | 'LABORATORIO' | 'RESIDENTE' | 'PRECEPTORIA' | 'CHEFIA';
+export interface User {
   username: string;
+  role: SapRole;
   groups: string[];
   displayName?: string[];
   email?: string[];
+  department?: string[];
+  title?: string[];
   givenName?: string[];
   userPrincipalName?: string[];
-  title?: string[];
-  department?: string[];
   employeeNumber?: string[];
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const accessToken = ref(localStorage.getItem('accessToken') || null);
+  // Evita guardar credenciais em localStorage/sessionStorage.
+  const accessToken = ref<string | null>(null);
   const user = ref<User | null>(null);
+  const initialized = ref(false);
+  let initializing: Promise<void> | null = null;
 
-  const isAuthenticated = computed(() => !!accessToken.value);
-  const isAdmin = computed(() => {
-    const ADMIN_GROUP = "GLO-SEC-HCPE-SETISD"; 
-    return user.value?.groups?.includes(ADMIN_GROUP) || false;
-  });
+  const isAuthenticated = computed(() => Boolean(accessToken.value && user.value));
+  const role = computed(() => user.value?.role ?? null);
+  const isAdmin = computed(() => user.value?.groups.includes('GLO-SEC-HCPE-SETISD') ?? false);
+  const isChefia = computed(() => role.value === 'CHEFIA');
+  const hasRole = (...roles: SapRole[]) => user.value !== null && roles.includes(user.value.role);
 
-  function setToken(token: string) {
-    accessToken.value = token;
-    localStorage.setItem('accessToken', token);
-  }
-
-  function clearToken() {
+  const setToken = (value: string) => { accessToken.value = value; };
+  const setUser = (value: User | null) => { user.value = value; };
+  const clearToken = () => {
     accessToken.value = null;
-    localStorage.removeItem('accessToken');
     user.value = null;
-  }
-
-  function setUser(userData: User | null) {
-    user.value = userData;
-  }
+    // Limpeza defensiva de tokens legados da versão anterior.
+    localStorage.removeItem('accessToken');
+  };
 
   async function fetchUser() {
     if (!accessToken.value) {
       setUser(null);
       return;
     }
-    try {
-      const { data } = await api.get('/api/users/me');
-      setUser(data);
-    } catch (error) {
-      console.error("Failed to fetch user info:", error);
-      clearToken(); // Clear token if user info fetch fails
-    }
+    const { data } = await api.get<User>('/api/users/me');
+    setUser(data);
   }
 
   async function login(username: string, password: string, rememberMe: boolean) {
+    clearToken();
     const params = new URLSearchParams();
-    params.append('username', username);
-    params.append('password', password);
-    if (rememberMe) {
-      params.append('remember_me', 'true');
-    }
-
-    const { data } = await api.post('/api/login', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    params.set('username', username.trim());
+    params.set('password', password);
+    params.set('remember_me', String(rememberMe));
+    const { data } = await api.post<{ access_token: string }>('/api/login', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     });
     setToken(data.access_token);
-    await fetchUser(); // Fetch user info immediately after login
-  }
-
-  async function logout(router?: any) {
     try {
-      await api.post('/api/logout');
+      await fetchUser();
     } catch (error) {
-      console.error("Logout failed, but clearing token anyway.", error);
-    } finally {
       clearToken();
-      if (router) {
-        router.push({ name: 'Login' });
-      }
+      throw error;
     }
+    initialized.value = true;
   }
 
   async function initializeAuth() {
-    if (accessToken.value) {
-      // If a token exists in localStorage, validate it by fetching user info
-      await fetchUser();
-    } else {
-      // If no token, try to get a new one using the refresh token cookie
+    if (initialized.value) return;
+    if (initializing) return initializing;
+    initializing = (async () => {
       try {
-        const { data } = await api.post('/api/token/refresh');
-        if (data.access_token) {
-          setToken(data.access_token);
-          await fetchUser(); // Fetch user info with the new token
-        }
-      } catch (error) {
-        // It's okay if this fails - it just means the user doesn't have a valid refresh token
-        console.log("No valid refresh token found.");
+        // A restauração funciona tanto depois de reload quanto quando access token expirou.
+        const { data } = await api.post<{ access_token: string }>('/api/token/refresh');
+        setToken(data.access_token);
+        await fetchUser();
+      } catch (_error) {
+        clearToken();
+      } finally {
+        initialized.value = true;
       }
+    })();
+    try { await initializing; } finally { initializing = null; }
+  }
+
+  async function logout(router?: Router) {
+    try {
+      await api.post('/api/logout');
+    } finally {
+      clearToken();
+      initialized.value = true;
+      if (router) await router.replace({ name: 'Login' });
     }
   }
 
-  return { 
-    accessToken, 
-    user, 
-    isAuthenticated, 
-    isAdmin, 
-    login, 
-    logout,
-    setToken,
-    clearToken,
-    fetchUser,
-    initializeAuth
+  return {
+    accessToken, user, initialized, isAuthenticated, role, isAdmin, isChefia,
+    hasRole, setToken, setUser, clearToken, fetchUser, login, logout, initializeAuth,
   };
 });

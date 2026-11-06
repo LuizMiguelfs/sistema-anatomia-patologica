@@ -1,89 +1,60 @@
 import axios from 'axios';
+import type { AxiosError } from 'axios';
+import { getActivePinia } from 'pinia';
+import type { InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../stores/auth';
-import router from '../router';
 
 const api = axios.create({
-  baseURL: '/', // Adjust if your API is on a different host
-  headers: {
-    'Content-Type': 'application/json',
-  }
+  baseURL: '/',
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor to add the access token
+type RetryConfig = InternalAxiosRequestConfig & { _retry?: boolean };
+const authEndpoints = ['/api/login', '/api/token/refresh', '/api/logout'];
+const isAuthEndpoint = (url?: string) => authEndpoints.some(path => (url || '').split('?')[0].endsWith(path));
+
 api.interceptors.request.use(config => {
-  const authStore = useAuthStore();
-  const token = authStore.accessToken;
-  
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  // fetchSystemConfig() é chamado durante import dos módulos, antes de app.use(pinia).
+  const token = getActivePinia() ? useAuthStore().accessToken : null;
+  if (token && !isAuthEndpoint(config.url)) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-let isRefreshing = false;
-let failedQueue: any[] = [];
+let refreshPromise: Promise<string> | null = null;
 
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach(prom => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-
-  failedQueue = [];
-};
-
-// Response error interceptor to handle expired tokens
 api.interceptors.response.use(
-  response => response, // Simply return successful responses
-  async error => {
-    const originalRequest = error.config;
-    const authStore = useAuthStore();
-
-    // Check if the error is 401 and it's not a retry request
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        return new Promise(function(resolve, reject) {
-          failedQueue.push({ resolve, reject });
-        }).then(token => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        }).catch(err => {
-          return Promise.reject(err);
-        });
-      }
-
-      originalRequest._retry = true; // Mark it as a retry
-      isRefreshing = true;
-
-      try {
-        console.log('Access token expired. Attempting to refresh...');
-        const { data } = await axios.post('/api/token/refresh');
-        
-        // Set the new token in the store
-        authStore.setToken(data.access_token);
-        
-        // Update the authorization header of the original request
-        originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
-        
-        processQueue(null, data.access_token);
-        // Retry the original request
-        return api(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        console.error('Unable to refresh token. Logging out.', refreshError);
-        authStore.logout(router); // If refresh fails, logout the user
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
-      }
+  response => response,
+  async (error: AxiosError) => {
+    const original = error.config as RetryConfig | undefined;
+    if (!original || error.response?.status !== 401 || original._retry || isAuthEndpoint(original.url) || !getActivePinia()) {
+      return Promise.reject(error);
     }
 
-    // For other errors, just reject the promise
-    return Promise.reject(error);
-  }
+    original._retry = true;
+    if (!refreshPromise) {
+      // Cliente Axios separado impede recursão infinita nos interceptadores.
+      refreshPromise = axios.post<{ access_token: string }>('/api/token/refresh', undefined, {
+        withCredentials: true,
+      }).then(response => {
+        useAuthStore().setToken(response.data.access_token);
+        return response.data.access_token;
+      }).finally(() => { refreshPromise = null; });
+    }
+    try {
+      const token = await refreshPromise;
+      original.headers.Authorization = `Bearer ${token}`;
+      return api(original);
+    } catch (refreshError) {
+      useAuthStore().clearToken();
+      // Evita dependência circular estática entre api.ts e router/index.ts.
+      const router = (await import('../router')).default;
+      if (router.currentRoute.value.name !== 'Login') {
+        await router.replace({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } });
+      }
+      return Promise.reject(refreshError);
+    }
+  },
 );
 
 export default api;

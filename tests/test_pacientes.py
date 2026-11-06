@@ -7,7 +7,8 @@ O arquivo real data/pacientes.csv e o data/app.db nunca são alterados.
 
 import json
 import shutil
-from datetime import date, timedelta
+import sqlite3
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,16 @@ CPF_VALIDO_2 = "111.444.777-35"
 CNS_VALIDO = "700000000000005"
 
 
+def _cadastrar_admin_de_teste(db_path: Path) -> None:
+    """Libera o admin APENAS no banco temporario desta fixture."""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO authorized_users (username, role, active, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            ("admin", "CHEFIA", 1, datetime.now(timezone.utc).isoformat()),
+        )
+
+
 @pytest.fixture
 def ambiente(tmp_path, monkeypatch):
     """TestClient com CSV e banco de auditoria isolados em diretório temporário."""
@@ -38,6 +49,7 @@ def ambiente(tmp_path, monkeypatch):
     app.dependency_overrides[dependencia] = lambda: PacienteCsvProvider(csv_path=str(csv_tmp))
     try:
         with TestClient(app) as client:
+            _cadastrar_admin_de_teste(tmp_path / "app.db")
             token = client.post("/api/login", data={"username": "admin", "password": "admin"}).json()["access_token"]
             client.headers.update({"Authorization": f"Bearer {token}"})
             yield client, csv_tmp
@@ -256,6 +268,7 @@ def ambiente_aghu_somente_leitura(tmp_path, monkeypatch):
     app.dependency_overrides[dependencia] = lambda: PacientePostgresProvider(session=None, escrita_habilitada=False)
     try:
         with TestClient(app) as client:
+            _cadastrar_admin_de_teste(tmp_path / "app.db")
             token = client.post("/api/login", data={"username": "admin", "password": "admin"}).json()["access_token"]
             client.headers.update({"Authorization": f"Bearer {token}"})
             yield client
