@@ -6,6 +6,38 @@ import Configuracoes from '../views/Configuracoes.vue';
 import Exemplos from '../views/Exemplos.vue';
 import Pacientes from '../views/Pacientes.vue';
 
+const routes = [
+  {
+    path: '/',
+    name: 'Início',
+    component: Home,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { layout: 'LoginLayout' },
+  },
+  {
+    path: '/componentes',
+    name: 'Componentes',
+    component: Exemplos,
+  },
+  {
+    path: '/exemplo',
+    name: 'Exemplo',
+    component: Pacientes,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/configuracoes',
+    name: 'Configuracoes',
+    component: Configuracoes,
+    meta: { requiresAuth: true },
+  },
+];
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
