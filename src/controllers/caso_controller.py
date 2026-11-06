@@ -11,6 +11,7 @@ Regras centrais:
 * Dados do AGHU são somente leitura (RNF005).
 """
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
@@ -46,6 +47,20 @@ PERFIS_POR_ETAPA: Dict[str, set] = {
 # --------------------------------------------------------------------------- #
 # Utilitários                                                                  #
 # --------------------------------------------------------------------------- #
+#: Fuso do hospital: o ano do identificador interno é o ano local da abertura do caso.
+FUSO_HOSPITAL = ZoneInfo("America/Recife")
+
+
+def _ano_local() -> int:
+    """Ano corrente no fuso do hospital (a numeração recomeça a cada ano)."""
+    return datetime.now(FUSO_HOSPITAL).year
+
+
+def formatar_identificador(sigla: str, numero: int, ano: int) -> str:
+    """Identificador interno SIGLA-NNNN/AA (ex.: HP-0001/26), definido com o setor."""
+    return f"{sigla}-{numero:04d}/{ano % 100:02d}"
+
+
 def _agora() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -183,9 +198,12 @@ async def abrir_caso(
     agora = _agora()
     login = _login(usuario)
     try:
+        # Número sequencial por sigla e ano, reservado na mesma transação do caso.
+        ano = _ano_local()
+        identificador = formatar_identificador(tipo, await provider.proximo_numero(tipo, ano), ano)
         caso_id = await provider.inserir_caso(
             {
-                "identificador_provisorio": f"PROV-{numero}-{agora}",
+                "identificador_interno": identificador,
                 "solicitacao_aghu": numero,
                 "paciente_codigo_aghu": str(cabecalho["paciente_codigo_aghu"]),
                 "paciente_nome": cabecalho["paciente_nome"],
@@ -197,8 +215,6 @@ async def abrir_caso(
                 "agora": agora,
             }
         )
-        identificador = f"SAP-{agora[:4]}-{caso_id:06d}"
-        await provider.definir_identificador(caso_id, identificador)
         for amostra in amostras:
             await provider.inserir_amostra(caso_id, str(amostra["amostra_aghu"]), amostra.get("descricao"))
         await provider.inserir_movimentacao(

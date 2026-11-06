@@ -55,11 +55,10 @@ class CasoPostgresProvider:
         row = await self._one("caso/inserir_caso.sql", dados)
         return int(row["id"])
 
-    async def definir_identificador(self, caso_id: int, identificador_interno: str) -> None:
-        await self._exec(
-            "caso/definir_identificador.sql",
-            {"caso_id": caso_id, "identificador_interno": identificador_interno},
-        )
+    async def proximo_numero(self, sigla: str, ano: int) -> int:
+        """Reserva o próximo número do identificador interno da sigla no ano (sem commit)."""
+        row = await self._one("caso/proximo_numero.sql", {"sigla": sigla, "ano": ano})
+        return int(row["ultimo"])
 
     async def inserir_amostra(self, caso_id: int, amostra_aghu: str, descricao: Optional[str]) -> None:
         await self._exec(

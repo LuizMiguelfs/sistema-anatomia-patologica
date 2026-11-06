@@ -55,6 +55,7 @@ class FakeProvider:
         self.movs: List[Dict] = []
         self.pendencias: Dict[int, int] = {}
         self.commits = 0
+        self.sequencias: Dict[tuple, int] = {}
         self.rollbacks = 0
 
     async def commit(self): self.commits += 1
@@ -67,11 +68,13 @@ class FakeProvider:
 
     async def inserir_caso(self, d):
         caso_id = len(self.casos) + 1
-        self.casos[caso_id] = {"id": caso_id, "identificador_interno": d["identificador_provisorio"], **{
+        self.casos[caso_id] = {"id": caso_id, "identificador_interno": d["identificador_interno"], **{
             k: d[k] for k in ("solicitacao_aghu", "paciente_nome", "tipo_exame", "etapa_atual", "status")}}
         return caso_id
 
-    async def definir_identificador(self, caso_id, ident): self.casos[caso_id]["identificador_interno"] = ident
+    async def proximo_numero(self, sigla, ano):
+        self.sequencias[(sigla, ano)] = self.sequencias.get((sigla, ano), 0) + 1
+        return self.sequencias[(sigla, ano)]
     async def inserir_amostra(self, caso_id, amostra, desc): self.amostras.append({"caso_id": caso_id, "amostra_aghu": amostra})
     async def listar_amostras(self, caso_id): return [a for a in self.amostras if a["caso_id"] == caso_id]
 
@@ -136,7 +139,7 @@ async def _abrir(provider, tipo="HP", numero="123"):
 async def test_abrir_caso_cria_vinculos_movimentacao_e_auditoria(auditoria):
     p = FakeProvider()
     caso = await _abrir(p)
-    assert caso["identificador_interno"].startswith("SAP-") and caso["identificador_interno"].endswith("000001")
+    assert caso["identificador_interno"] == f"HP-0001/{ctrl._ano_local() % 100:02d}"
     assert caso["etapa_atual"] == "RECEPCAO" and caso["status"] == "EM_ANDAMENTO"
     assert len(caso["amostras"]) == 2  # nenhuma amostra sem caso
     assert p.movs[0]["tipo"] == "ABERTURA" and p.commits == 1
@@ -263,3 +266,20 @@ async def test_auditoria_entra_na_mesma_transacao_do_caso(auditoria):
     assert auditoria and all(r.get("commit") is False for r in auditoria)
     assert {r["recurso"] for r in auditoria} == {f"caso:{caso['id']}"}
     assert {r["categoria"] for r in auditoria} == {"NEGOCIO_CLINICO"}
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestWarning")
+def test_formato_do_identificador_interno():
+    assert ctrl.formatar_identificador("HP", 1, 2026) == "HP-0001/26"
+    assert ctrl.formatar_identificador("CCV", 42, 2027) == "CCV-0042/27"
+    assert ctrl.formatar_identificador("CO", 12345, 2030) == "CO-12345/30"  # passa de 9999 sem cortar
+
+
+async def test_numeracao_separada_por_sigla_e_reiniciada_a_cada_ano(monkeypatch):
+    p = FakeProvider()
+    monkeypatch.setattr(ctrl, "_ano_local", lambda: 2026)
+    ids = [(await _abrir(p, tipo, str(n)))["identificador_interno"]
+           for n, tipo in enumerate(["HP", "CG", "HP", "CG", "HP"], start=1)]
+    assert ids == ["HP-0001/26", "CG-0001/26", "HP-0002/26", "CG-0002/26", "HP-0003/26"]
+    monkeypatch.setattr(ctrl, "_ano_local", lambda: 2027)
+    assert (await _abrir(p, "HP", "99"))["identificador_interno"] == "HP-0001/27"

@@ -96,6 +96,12 @@ def upgrade() -> None:
         sa.UniqueConstraint("tipo_exame", "etapa_origem", "etapa_destino", "tipo"),
     )
     op.bulk_insert(fluxo, _seed())
+    op.create_table(
+        "caso_sequencias",  # numeração do identificador interno SIGLA-NNNN/AA, por sigla e por ano
+        sa.Column("sigla", sa.String(3), primary_key=True),
+        sa.Column("ano", sa.Integer, primary_key=True),
+        sa.Column("ultimo", sa.Integer, nullable=False),
+    )
 
 
 def downgrade() -> None:
