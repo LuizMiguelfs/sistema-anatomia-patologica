@@ -41,7 +41,8 @@ class Settings:
     SAP_DATA_KEY = os.getenv("SAP_DATA_KEY", "")
 
     @classmethod
-    def validate_config(cls):
+    def validate_config(cls) -> None:
+        """Valida as variáveis de ambiente na inicialização; falha imediatamente se a configuração for insegura."""
         if cls.ENV not in {"development", "testing", "test", "production"}:
             raise RuntimeError("ENV deve ser development, testing ou production")
         if cls.ACCESS_TOKEN_MINUTES < 1 or cls.REFRESH_TOKEN_EXP_DAYS < 1 or cls.SESSION_REFRESH_HOURS < 1:

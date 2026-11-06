@@ -16,7 +16,8 @@ from src.helpers.audit_helper import registrar_auditoria
 from src.models.authorized_user import AuthorizedUser
 
 
-def arguments():
+def arguments() -> argparse.Namespace:
+    """Lê os argumentos da linha de comando."""
     parser = argparse.ArgumentParser(description="Provisiona usuário autorizado do SAP")
     parser.add_argument("--username", required=True)
     parser.add_argument("--role", required=True, choices=sorted(ROLES))
@@ -26,7 +27,8 @@ def arguments():
     return parser.parse_args()
 
 
-async def main():
+async def main() -> None:
+    """Valida o login no AD e grava a autorização local com auditoria, na mesma transação."""
     args = arguments()
     if not args.confirm:
         raise SystemExit("Alteração não executada. Informe --confirm após validação pela gestão.")
