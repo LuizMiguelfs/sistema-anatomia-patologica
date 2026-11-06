@@ -32,6 +32,7 @@ Para garantir a **segurança da informação corporativa** e a **padronização 
 | `JWT_SECRET` | Criptografia | String | Sim | Chave forte usada para assinar Tokens JWT |
 | `JWT_EXP_HOURS` | Criptografia | Int | Sim | Validade do Access Token em horas (padrão: `24`) |
 | `REFRESH_TOKEN_EXP_DAYS` | Criptografia | Int | Sim | Validade do Cookie HttpOnly em dias (padrão: `30`) |
+| `SAP_DATA_KEY` | Criptografia | String | Sim | Chave AES-256 (32 bytes em base64) dos dados sensíveis gravados pelo SAP. Gerar com `python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"`. Sem ela, dados já gravados ficam ilegíveis: guardar com backup seguro. |
 
 ---
 

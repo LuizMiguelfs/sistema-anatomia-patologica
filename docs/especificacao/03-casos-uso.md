@@ -1,7 +1,7 @@
 # Modelagem de Casos de Uso
 
 > **Sistema:** Serviço de Anatomia Patológica (SAP) — HC-UFPE / SETISD
-> **Origem:** `02-requisitos.md` (RF001 a RF027), `00-validacao-negocio.md` (atores, regras RN-01 a RN-07, pontos de decisão) e o *Feedback do fluxo atual do processo*.
+> **Origem:** `02-requisitos.md` (RF001 a RF028), `00-validacao-negocio.md` (atores, regras RN-01 a RN-07, pontos de decisão) e o *Feedback do fluxo atual do processo*.
 
 ## 1. Atores
 
@@ -11,7 +11,7 @@
 | **Laboratório / Técnicos** | Registra macroscopia, Congelação, processamento técnico, pedidos adicionais, IHQ e envios externos. |
 | **Residentes** | Preenchem o pré-laudo após a análise da peça. |
 | **Validação / Preceptoria** | Valida o pré-laudo, registra o diagnóstico e o laudo, arquiva o caso e pede processamentos adicionais. |
-| **Técnico Administrativo (Chefia do UACAP)** | Acompanha painéis e indicadores, reabre casos, delega substituições e define configurações de negócio. |
+| **Técnico Administrativo (Chefia do UACAP)** | Acompanha painéis e indicadores, reabre casos, delega substituições, define configurações de negócio e gerencia os usuários e perfis do SAP. |
 | **Regulação do hospital** *(externo)* | Cadastra no AGHU os pacientes de exames externos. |
 | **Bloco Cirúrgico** *(externo)* | Solicita exames e recebe a resposta da Congelação. |
 
@@ -73,6 +73,7 @@ flowchart LR
             UC023(["UC023 Reabrir caso ou laudo"])
             UC024(["UC024 Delegar substituição"])
             UC025(["UC025 Configurar fluxos, prazos e faturáveis"])
+            UC026(["UC026 Gerenciar usuários e perfis"])
         end
     end
 
@@ -109,6 +110,7 @@ flowchart LR
     CHE --- UC023
     CHE --- UC024
     CHE --- UC025
+    CHE --- UC026
 
     UC004 -.- REG
     UC007 -.- BLO
@@ -155,7 +157,7 @@ flowchart LR
 ### UC002 - Abrir caso a partir da solicitação do AGHU
 * **Ator**: Recepção.
 * **Pré-condição**: Solicitação aceita no AGHU; usuário autenticado como Recepção.
-* **Fluxo**: Informar número da solicitação → Sistema consulta o AGHU Slave → Sistema exibe paciente, solicitação e amostras já preenchidos → Recepção confirma → Sistema cria o caso com identificador interno e vínculo com a solicitação e a amostra.
+* **Fluxo**: Informar número da solicitação → Sistema consulta o AGHU Slave → Sistema exibe paciente, solicitação e amostras já preenchidos → Recepção confirma → Sistema cria o caso (um por solicitação) com identificador interno `SIGLA-NNNN/AA` (numeração por sigla, reiniciada a cada ano) e vínculo com a solicitação e a amostra.
 * **Alternativos/Exceções**: Solicitação inexistente (mensagem clara); AGHU indisponível (sinalização sem criar registro parcial); caso já aberto para a mesma solicitação (bloqueia duplicidade).
 * **Pós-condição**: Caso criado, vinculado e auditado; campos de origem AGHU somente leitura.
 * **Requisitos**: RF003, RF004, RNF005; RN-01, RN-02.
@@ -486,6 +488,20 @@ flowchart LR
 * **Result**: Mudança de regra sem alterar código; alterações auditadas.
 * **Evaluation**: Teste valida a recusa de configurações incoerentes e que casos em andamento não são afetados retroativamente.
 
+### UC026 - Gerenciar usuários e perfis
+* **Ator**: Técnico Administrativo (Chefia do UACAP).
+* **Pré-condição**: Usuário autenticado com perfil de Chefia. A primeira Chefia é cadastrada pela TI com o script `scripts/provision_sap_user.py`.
+* **Fluxo**: Abrir Configurações → Incluir usuário: informar o login de rede → Sistema consulta o AD e mostra nome, e-mail e setor → Escolher o perfil → Sistema grava o acesso. Também: alterar o perfil de um usuário, inativar ou reativar o acesso.
+* **Alternativos/Exceções**: Login inexistente ou desativado no AD (inclusão recusada); login já cadastrado (sugere alterar perfil ou reativar); tentativa de alterar o próprio perfil ou inativar o próprio acesso (recusada); grupo do AD exigido para o perfil ausente, quando a instituição configurar esse mapa (recusada).
+* **Pós-condição**: Acesso e perfil valem na próxima requisição do usuário; alteração auditada (SEGURANCA) com valor anterior e novo. Nenhum usuário é excluído.
+* **Requisitos**: RF028, RF002; RN-04, RN-05.
+
+#### [CARE-UC026] Implementação da gestão de usuários
+* **Context**: Tabela `authorized_users` no banco local; consulta ao AD por conta de serviço.
+* **Action**: Implementar SQL, provider, controller e router `/api/admin/usuarios` restritos à Chefia, e a tela em Configurações.
+* **Result**: Usuários incluídos, alterados e inativados sem exclusão física, com auditoria na mesma transação.
+* **Evaluation**: `tests/test_usuarios.py` cobre acesso só da Chefia, inclusão com nome do AD, duplicidade, login fora do AD, auto-alteração, inativação com efeito imediato e atomicidade da auditoria.
+
 ## 4. Rastreabilidade
 
 | Caso de uso | Requisitos funcionais | Regras de negócio |
@@ -515,6 +531,7 @@ flowchart LR
 | UC023 | RF022 | RN-04 |
 | UC024 | RF026 | RN-05 |
 | UC025 | RF005 | RN-03 |
+| UC026 | RF028, RF002 | RN-04, RN-05 |
 
 Todos os RFs do `02-requisitos.md` têm pelo menos um caso de uso.
 
@@ -531,6 +548,5 @@ Todos os RFs do `02-requisitos.md` têm pelo menos um caso de uso.
 | Decisão 7: IHQ em hospital conveniado | UC015 |
 | Decisão 8: lista de faturáveis | UC022 |
 | Interação de Regulação e Bloco Cirúrgico com o SAP (não definida) | UC004, UC007 |
-| Congelação e HP seguinte: um caso ou dois casos vinculados | UC002, UC007 |
 | Quem emite o laudo da Congelação (Laboratório, Residentes ou Preceptoria) | UC007 |
 | Lista de erros possíveis no retorno à Recepção | UC006, UC010, UC012 |

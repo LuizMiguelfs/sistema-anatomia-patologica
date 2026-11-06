@@ -12,7 +12,8 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
+    """Acrescenta refresh_tokens.groups se a tabela já existir (sem apagar nada)."""
     inspector = sa.inspect(op.get_bind())
     if 'refresh_tokens' not in inspector.get_table_names():
         # The following revision 4b1f20261103 creates the table with the final schema.
@@ -22,5 +23,6 @@ def upgrade():
         op.add_column('refresh_tokens', sa.Column('groups', sa.JSON(), nullable=True))
 
 
-def downgrade():
+def downgrade() -> None:
+    """Downgrade destrutivo desabilitado (preserva as sessões)."""
     raise RuntimeError('Downgrade destrutivo desabilitado para preservar sessões')

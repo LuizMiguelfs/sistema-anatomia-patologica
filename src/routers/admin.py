@@ -22,14 +22,15 @@ class AdminData(BaseModel):
     message: str
     user_groups: List[str]
 
-async def verify_admin_group(current_user: dict = Depends(auth_handler.decode_token)):
+async def verify_admin_group(current_user: dict = Depends(auth_handler.decode_token)) -> dict:
+    """Libera só para o grupo de TI do AD (GLO-SEC-HCPE-SETISD); 403 caso contrário."""
     ADMIN_GROUP = "GLO-SEC-HCPE-SETISD"
     if ADMIN_GROUP not in current_user.get("groups", []):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
     return current_user
 
 @router.get("/admin-only-data", response_model=AdminData)
-async def get_admin_data(current_user: dict = Depends(verify_admin_group)):
+async def get_admin_data(current_user: dict = Depends(verify_admin_group)) -> AdminData:
     """
     Returns data only accessible by users with admin privileges.
     """
@@ -45,11 +46,21 @@ class ADUserSearchResponse(BaseModel):
     email: str
     department: str
 
+async def verify_ad_search_access(current_user: dict = Depends(auth_handler.decode_token)) -> dict:
+    """
+    Busca no AD: TI (grupo do AD) e Chefia (perfil local). A busca é o primeiro passo da
+    gestão de usuários (decidir quem entra no SAP e com qual perfil), que é da Chefia.
+    """
+    if "GLO-SEC-HCPE-SETISD" in current_user.get("groups", []) or current_user.get("role") == "CHEFIA":
+        return current_user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
+
+
 @router.get("/admin/ad-user-search/{username}", response_model=ADUserSearchResponse)
-async def search_ad_user(username: str, current_user: dict = Depends(verify_admin_group)):
+async def search_ad_user(username: str, current_user: dict = Depends(verify_ad_search_access)) -> ADUserSearchResponse:
     """
     Busca e valida um usuário no Active Directory (ou Mock) pelo login de rede.
-    Restrito a administradores do sistema.
+    Restrito à TI (grupo do AD) e à Chefia (gestão de usuários).
     """
     res = await run_in_threadpool(auth_handler.search_ad_user, username)
     return ADUserSearchResponse(**res)

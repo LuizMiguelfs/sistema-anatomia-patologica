@@ -14,7 +14,8 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
+    """Cria (se faltarem) refresh_tokens, authorized_users e audit_logs, sem apagar dados."""
     inspector = sa.inspect(op.get_bind())
     tables = set(inspector.get_table_names())
     if "refresh_tokens" not in tables:
@@ -58,5 +59,6 @@ def upgrade():
             op.create_index(f"ix_audit_logs_{col}", "audit_logs", [col])
 
 
-def downgrade():
+def downgrade() -> None:
+    """Downgrade destrutivo desabilitado (retenção do histórico e das sessões)."""
     raise RuntimeError("Downgrade destrutivo desabilitado: retenção obrigatória do histórico e sessões")

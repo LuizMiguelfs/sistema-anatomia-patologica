@@ -3,6 +3,8 @@ import os
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
+from .helpers.crypto_helper import validar_chave
+
 load_dotenv()
 
 
@@ -35,15 +37,19 @@ class Settings:
     ACCESS_TOKEN_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "15"))
     REFRESH_TOKEN_EXP_DAYS = int(os.getenv("REFRESH_TOKEN_EXP_DAYS", "30"))
     SESSION_REFRESH_HOURS = int(os.getenv("SESSION_REFRESH_HOURS", "12"))
+    # Chave AES-256 dos dados sensíveis gravados pelo SAP (32 bytes em base64).
+    SAP_DATA_KEY = os.getenv("SAP_DATA_KEY", "")
 
     @classmethod
-    def validate_config(cls):
+    def validate_config(cls) -> None:
+        """Valida as variáveis de ambiente na inicialização; falha imediatamente se a configuração for insegura."""
         if cls.ENV not in {"development", "testing", "test", "production"}:
             raise RuntimeError("ENV deve ser development, testing ou production")
         if cls.ACCESS_TOKEN_MINUTES < 1 or cls.REFRESH_TOKEN_EXP_DAYS < 1 or cls.SESSION_REFRESH_HOURS < 1:
             raise RuntimeError("Configuração de validade de tokens inválida")
         if len(cls.JWT_SECRET) < 32:
             raise RuntimeError("JWT_SECRET deve ter pelo menos 32 caracteres")
+        validar_chave(cls.SAP_DATA_KEY)  # AES-256 obrigatório em todos os ambientes (SPEC.md)
         if cls.ENV == "production":
             banned = {"super-secret-key-change-in-production", "SUA_CHAVE_SECRETA_SUPER_FORTE_AQUI_ALTERAR_EM_PRODUCAO"}
             if len(cls.JWT_SECRET) < 32 or cls.JWT_SECRET in banned:

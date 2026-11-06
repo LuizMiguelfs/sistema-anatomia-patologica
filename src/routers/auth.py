@@ -3,6 +3,7 @@
 Cookie HttpOnly restrito a /api; access token fica somente em memória no frontend.
 """
 import os
+from typing import Any, Dict
 from datetime import timedelta
 from urllib.parse import urlparse
 
@@ -32,6 +33,7 @@ def _cookie(response: Response, token: str, remember_me: bool) -> None:
 
 
 def _clear_cookie(response: Response) -> None:
+    """Remove o cookie de refresh com os mesmos atributos usados na criação."""
     response.delete_cookie(COOKIE_NAME, path=COOKIE_PATH, httponly=True,
                            secure=COOKIE_SECURE, samesite="lax")
 
@@ -52,6 +54,7 @@ def _validate_origin(request: Request) -> None:
 
 def _ip(request: Request) -> str | None:
     # Não confiar em X-Forwarded-For sem validação de proxy de confiança.
+    """IP de origem para a auditoria (sem confiar em X-Forwarded-For)."""
     return request.client.host if request.client else None
 
 
@@ -62,7 +65,8 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     remember_me: bool = Form(False),
     db: AsyncSession = Depends(get_app_db_session),
-):
+) -> Dict[str, Any]:
+    """Autentica no AD, exige autorização local e devolve o access token; o refresh vai em cookie HttpOnly."""
     _validate_origin(request)
     try:
         user = await run_in_threadpool(auth_handler.authenticate_user,
@@ -84,7 +88,8 @@ async def login(
 
 @router.post("/token/refresh")
 async def refresh_token(request: Request, response: Response,
-                        db: AsyncSession = Depends(get_app_db_session)):
+                        db: AsyncSession = Depends(get_app_db_session)) -> Dict[str, Any]:
+    """Renova a sessão: revalida a conta no AD e o perfil local, consome o refresh (uso único) e emite novos tokens."""
     _validate_origin(request)
     raw = request.cookies.get(COOKIE_NAME)
     if not raw:
@@ -119,7 +124,8 @@ async def refresh_token(request: Request, response: Response,
 
 @router.post("/logout")
 async def logout(request: Request, response: Response,
-                 db: AsyncSession = Depends(get_app_db_session)):
+                 db: AsyncSession = Depends(get_app_db_session)) -> Dict[str, str]:
+    """Encerra a sessão: revoga o refresh token (exclusão lógica) e apaga o cookie."""
     _validate_origin(request)
     raw = request.cookies.get(COOKIE_NAME)
     if raw:
@@ -129,5 +135,6 @@ async def logout(request: Request, response: Response,
 
 
 @router.get("/users/me")
-async def read_users_me(current_user: dict = Depends(auth_handler.decode_token)):
+async def read_users_me(current_user: dict = Depends(auth_handler.decode_token)) -> dict:
+    """Dados do usuário logado (perfil lido do banco nesta requisição)."""
     return current_user

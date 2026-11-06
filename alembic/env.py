@@ -6,6 +6,7 @@ import os
 from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import pool
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 load_dotenv()
@@ -21,20 +22,23 @@ config.set_main_option("sqlalchemy.url", os.getenv("SQLITE_DSN") or os.getenv("A
 target_metadata = Base.metadata
 
 
-def run_migrations_offline():
+def run_migrations_offline() -> None:
+    """Gera o SQL das migrações sem conectar ao banco (modo offline)."""
     context.configure(url=config.get_main_option("sqlalchemy.url"), target_metadata=target_metadata,
                       literal_binds=True, dialect_opts={"paramstyle": "named"})
     with context.begin_transaction():
         context.run_migrations()
 
 
-def do_run_migrations(connection):
+def do_run_migrations(connection: Connection) -> None:
+    """Executa as migrações na conexão síncrona fornecida."""
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
 
-async def run_migrations_online():
+async def run_migrations_online() -> None:
+    """Executa as migrações no banco local usando o engine assíncrono."""
     engine = async_engine_from_config(config.get_section(config.config_ini_section) or {},
                                       prefix="sqlalchemy.", poolclass=pool.NullPool)
     try:

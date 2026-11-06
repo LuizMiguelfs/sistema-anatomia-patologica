@@ -66,6 +66,12 @@ def test_refresh_is_hashed_at_rest_and_rotates_once(client):
     assert client.cookies.get("refresh_token") != raw
     replay = client.post("/api/token/refresh", cookies={"refresh_token": raw})
     assert replay.status_code == 401
+    # Sem exclusão física: o token consumido continua no banco, marcado em deleted_at.
+    with sqlite3.connect(_dbpath(client)) as db:
+        linhas = db.execute("SELECT token, deleted_at FROM refresh_tokens ORDER BY id").fetchall()
+    assert len(linhas) == 2
+    assert linhas[0][0] == digest and linhas[0][1] is not None
+    assert linhas[1][1] is None
 
 
 def test_logout_invalidates_refresh(client, login):
@@ -73,6 +79,10 @@ def test_logout_invalidates_refresh(client, login):
     assert old
     assert client.post("/api/logout").status_code == 200
     assert client.post("/api/token/refresh", cookies={"refresh_token": old}).status_code == 401
+    with sqlite3.connect(_dbpath(client)) as db:
+        revogado = db.execute("SELECT deleted_at FROM refresh_tokens WHERE token = ?",
+                              (hashlib.sha256(old.encode()).hexdigest(),)).fetchone()
+    assert revogado is not None and revogado[0] is not None
 
 
 def test_account_deactivation_takes_effect_immediately(client, login):

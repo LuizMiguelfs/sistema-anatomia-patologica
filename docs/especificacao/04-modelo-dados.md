@@ -14,15 +14,15 @@ O provedor de pacientes é selecionado por `PACIENTE_PROVIDER_TYPE` em `src/conf
 
 ## Entidades persistidas pela aplicação
 
-- `authorized_users`: identificação, papel, situação ativa e timestamps. Controle de autorização local complementar à autenticação de rede.
-- `refresh_tokens`: tokens de renovação, identificação do usuário, expiração, grupos e data de criação. Tratar como dados sensíveis; jamais registrar tokens nos logs.
-- `audit_logs`: usuário, categoria, ação, recurso, valores anteriores/novos, origem e timestamp. Registros históricos devem permanecer imutáveis.
+- `authorized_users`: login de rede, nome (vindo do AD na inclusão), perfil, situação ativa e timestamps. Controle de autorização local complementar à autenticação de rede. Gerenciada pela Chefia (RF028); não há exclusão: o acesso é inativado (`active = 0`).
+- `refresh_tokens`: hash SHA-256 do token de renovação, identificação do usuário, expiração, metadados (`groups`), data de criação e `deleted_at` (exclusão lógica ao renovar ou sair). Tratar como dados sensíveis; jamais registrar tokens nos logs.
+- `audit_logs`: usuário, categoria, ação, recurso, valores anteriores/novos, origem e timestamp. Registros históricos devem permanecer imutáveis. Em registros `NEGOCIO_CLINICO`, os campos de `dados_anteriores`/`dados_novos` que identificam o paciente (nome, nome da mãe e do pai, CPF, CNS, data de nascimento e prontuário) são gravados cifrados com AES-256 (`aes256gcm:v1:...`) e decifrados na leitura pela API; os demais campos ficam legíveis.
 
 O esquema canônico das tabelas locais é definido em `src/models/authorized_user.py`, `src/models/refresh_token.py` e `src/models/audit_log.py` e nas revisões Alembic. Referências a `PRONTUARIO` e `EVOLUCAO` em propostas anteriores eram **modelos conceituais**, não tabelas comprovadamente implementadas neste repositório.
 
 ## Migrações
 
-Cadeia linear existente: `df72b10ec0f3` → `8a2efbe37bb6` → `4b1f20261103`. O Alembic deve reportar **um head**. A revisão intermediária foi ajustada para não apagar `refresh_tokens` durante instalações novas. Migrações que já tenham rodado no ambiente de equipe exigem revisão e backup antes de reaplicar ou alterar a versão registrada.
+Cadeia linear existente: `df72b10ec0f3` → `8a2efbe37bb6` → `4b1f20261103` → `c7a1d2e3f405` (triggers de imutabilidade de `audit_logs`) → `d3b8f1a2c6e7` (`refresh_tokens.deleted_at`) → `e5a9c4d7b210` (`authorized_users.nome`). O Alembic deve reportar **um head**. A revisão intermediária foi ajustada para não apagar `refresh_tokens` durante instalações novas. Migrações que já tenham rodado no ambiente de equipe exigem revisão e backup antes de reaplicar ou alterar a versão registrada.
 
 Com banco de teste e backup disponível:
 
@@ -33,3 +33,72 @@ uv run alembic upgrade head
 ```
 
 O banco AGHU não é migrado pelo Alembic local. Em produção, o usuário de conexão do AGHU deve ter somente permissão `SELECT`.
+
+## Caso (módulo do Membro 4)
+
+- **Caso = solicitação do AGHU.** Cada solicitação gera um caso; não existe caso sem solicitação (RN-02).
+- **Congelação (CO) e Histopatológico (HP)** chegam como duas solicitações e geram dois casos.
+- **Identificador interno:** `SIGLA-NNNN/AA` (ex.: `HP-0001/26`). `SIGLA` ∈ {HP, CO, IHQ, CG, CCV}; `NNNN` é sequencial **por sigla**, com quatro dígitos, e recomeça em 0001 a cada ano; `AA` são os dois últimos dígitos do ano. O identificador é único.
+- Dados de paciente gravados na tabela de casos seguem a regra de AES-256 do `SPEC.md`.
+
+## Regras de Integridade
+* Trilha de auditoria obrigatória em `audit_logs` para mutações e proibição de exclusão física de registros de auditoria.
+* Nenhuma tabela do SAP sofre exclusão física: usar exclusão lógica (`deleted_at`) ou situação (`active`/`ativo`).
+* Dados que identificam um único paciente (nome, nome da mãe e do pai, CPF, CNS, data de nascimento e prontuário) são cifrados com AES-256 (`SPEC.md`). Busca exata por um desses valores usa índice HMAC-SHA256, nunca o valor em claro.
+
+## Esquemas JSON
+
+### [SCHEMA] Esquema JSON - AuditLog
+Formato do registro como entra no helper `registrar_auditoria` e como sai da API (no banco, os campos que identificam o paciente ficam cifrados).
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AuditLog",
+  "type": "object",
+  "properties": {
+    "usuario": { "type": "string" },
+    "categoria": { "type": "string", "enum": ["SEGURANCA", "NEGOCIO_CLINICO", "CONFIGURACAO"] },
+    "acao": { "type": "string" },
+    "recurso": { "type": "string" },
+    "dados_anteriores": { "type": ["object", "null"] },
+    "dados_novos": { "type": ["object", "null"] },
+    "ip_origem": { "type": ["string", "null"] }
+  },
+  "required": ["usuario", "categoria", "acao", "recurso"]
+}
+```
+
+### [SCHEMA] Esquema JSON - Paciente
+> **Pendente:** o módulo de pacientes (PR #1) aceita CPF opcional e com máscara, o que diverge deste esquema (CPF obrigatório, 11 dígitos). A view do AGHU (`vw_solicitacao`) não traz CPF nem CNS, e sim o prontuário. Segundo o setor, o caso é acessado pelo número da solicitação do AGHU (o "código do exame", coluna "AGHU" da planilha) ou pelo prontuário do paciente. A obrigatoriedade do CPF segue em aberto.
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Paciente",
+  "type": "object",
+  "properties": {
+    "nome": { "type": "string", "minLength": 3 },
+    "cpf": { "type": "string", "pattern": "^[0-9]{11}$" },
+    "cns": { "type": "string", "pattern": "^[0-9]{15}$" },
+    "data_nascimento": { "type": "string", "format": "date" }
+  },
+  "required": ["nome", "cpf", "data_nascimento"]
+}
+```
+
+### [SCHEMA] Esquema JSON - Usuário autorizado (saída de `/api/admin/usuarios`)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UsuarioSap",
+  "type": "object",
+  "properties": {
+    "username": { "type": "string" },
+    "nome": { "type": ["string", "null"] },
+    "perfil": { "type": "string", "enum": ["RECEPCAO", "LABORATORIO", "RESIDENTE", "PRECEPTORIA", "CHEFIA"] },
+    "ativo": { "type": "boolean" },
+    "criado_em": { "type": "string", "format": "date-time" },
+    "atualizado_em": { "type": ["string", "null"], "format": "date-time" }
+  },
+  "required": ["username", "perfil", "ativo", "criado_em"]
+}
+```

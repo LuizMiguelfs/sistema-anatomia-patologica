@@ -12,6 +12,7 @@ import os
 import re
 import secrets
 import ssl
+from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 
 import jwt
@@ -22,11 +23,11 @@ from ldap3 import ALL, SUBTREE, SIMPLE, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPBindError, LDAPException
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.utils.dn import parse_dn
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings  # valida configurações na inicialização
-from ..models.audit_log import AuditLog
+from ..helpers.audit_helper import registrar_auditoria
 from ..models.authorized_user import AuthorizedUser
 from ..models.refresh_token import RefreshToken
 from ..resources.database import get_app_db_session
@@ -47,10 +48,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 
 def now_utc() -> datetime:
+    """Agora em UTC, sem fuso (formato gravado no SQLite)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def normalize_username(value: str) -> str:
+    """Normaliza o login de rede (sem domínio, minúsculo); 401 se inválido ou de outro domínio."""
     if not isinstance(value, str):
         raise HTTPException(401, "Credenciais inválidas")
     user = value.strip()
@@ -65,16 +68,19 @@ def normalize_username(value: str) -> str:
 
 
 def _hash_token(value: str) -> str:
+    """SHA-256 do refresh token: o valor cru nunca é gravado."""
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _safe_groups(value) -> list[str]:
+def _safe_groups(value: Any) -> list[str]:
+    """Lista de grupos limpa: só textos curtos, sem repetição, no máximo 200."""
     if not isinstance(value, list):
         return []
     return list(dict.fromkeys(item for item in value if isinstance(item, str) and len(item) <= 256))[:200]
 
 
 def _ldap_group_name(dn: str) -> str | None:
+    """Extrai o CN de um DN de grupo do AD; None se não houver."""
     try:
         for attribute, value, _separator in parse_dn(str(dn)):
             if attribute.upper() == "CN":
@@ -104,12 +110,20 @@ def _role_group_policy() -> dict[str, set[str]]:
         raise RuntimeError("SAP_ROLE_GROUP_MAP deve ser JSON {PERFIL: [GRUPO_AD]}") from exc
 
 
+def grupos_permitem_perfil(role: str, groups: list[str]) -> bool:
+    """True se os grupos do AD atendem ao SAP_ROLE_GROUP_MAP para o perfil (sem mapa: sempre True)."""
+    exigidos = _role_group_policy().get(role)
+    return not exigidos or bool(exigidos.intersection(g.casefold() for g in groups))
+
+
 class AuthProviderInterface(ABC):
     @abstractmethod
-    def authenticate_user(self, username: str, password: str) -> dict: ...
+    def authenticate_user(self, username: str, password: str) -> dict:
+        """Valida login e senha na fonte de identidade e devolve o perfil profissional."""
 
     @abstractmethod
-    def search_user(self, username: str) -> dict: ...
+    def search_user(self, username: str) -> dict:
+        """Consulta a conta pelo login (existência, situação, nome, setor e grupos)."""
 
 
 class MockAuthProvider(AuthProviderInterface):
@@ -121,6 +135,7 @@ class MockAuthProvider(AuthProviderInterface):
     }
 
     def search_user(self, username: str) -> dict:
+        """Consulta um login no catálogo simulado (só desenvolvimento/testes)."""
         username = normalize_username(username)
         info = self._users.get(username)
         if not info and "." in username:
@@ -134,6 +149,7 @@ class MockAuthProvider(AuthProviderInterface):
         }
 
     def authenticate_user(self, username: str, password: str) -> dict:
+        """Login simulado: só o admin, com a senha de MOCK_AUTH_PASSWORD."""
         username = normalize_username(username)
         expected = os.getenv("MOCK_AUTH_PASSWORD", "")
         if not expected:
@@ -145,6 +161,7 @@ class MockAuthProvider(AuthProviderInterface):
 
 
 def _as_profile(info: dict) -> dict:
+    """Formato do perfil profissional usado no token (listas, como no AD)."""
     return {
         "username": info["username"], "groups": _safe_groups(info.get("groups", [])),
         "displayName": [info.get("displayName", "")],
@@ -155,7 +172,8 @@ def _as_profile(info: dict) -> dict:
 
 
 class ActiveDirectoryAuthProvider(AuthProviderInterface):
-    def __init__(self):
+    def __init__(self) -> None:
+        """Valida a configuração do AD (só LDAPS, sem credencial na URL) e prepara o servidor."""
         ad_url = os.getenv("AD_URL", "")
         self.base_dn = os.getenv("AD_BASEDN", "")
         self.bind_user = os.getenv("AD_BIND_USER", "")
@@ -172,7 +190,8 @@ class ActiveDirectoryAuthProvider(AuthProviderInterface):
         self.server = Server(parsed.hostname, port=parsed.port or 636,
                              use_ssl=True, tls=tls, get_info=ALL, connect_timeout=5)
 
-    def _read_entry(self, conn, username: str) -> dict:
+    def _read_entry(self, conn: Connection, username: str) -> dict:
+        """Lê a conta no AD pelo sAMAccountName e devolve situação, dados profissionais e grupos."""
         attributes = ["displayName", "mail", "department", "title", "memberOf", "userAccountControl"]
         query = f"(&(objectClass=user)(sAMAccountName={escape_filter_chars(username)}))"
         conn.search(self.base_dn, query, search_scope=SUBTREE, attributes=attributes, size_limit=2)
@@ -181,7 +200,8 @@ class ActiveDirectoryAuthProvider(AuthProviderInterface):
                     "displayName": "", "email": "", "department": "", "groups": []}
         attributes = conn.entries[0].entry_attributes_as_dict
 
-        def value(name, default=""):
+        def value(name: str, default: Any = "") -> Any:
+            """Primeiro valor de um atributo do AD, ou o padrão."""
             item = attributes.get(name, default)
             return item[0] if isinstance(item, (list, tuple)) and item else (item or default)
 
@@ -201,6 +221,7 @@ class ActiveDirectoryAuthProvider(AuthProviderInterface):
         }
 
     def authenticate_user(self, username: str, password: str) -> dict:
+        """Autentica com bind do próprio usuário no AD e devolve o perfil profissional."""
         username = normalize_username(username)
         if not password:
             raise HTTPException(401, "Credenciais inválidas")
@@ -231,6 +252,7 @@ class ActiveDirectoryAuthProvider(AuthProviderInterface):
                 user_conn.unbind()
 
     def search_user(self, username: str) -> dict:
+        """Consulta a conta no AD com a conta de serviço (sem senha do usuário)."""
         username = normalize_username(username)
         if not (self.bind_user and self.bind_password):
             raise HTTPException(503, "Conta de serviço AD necessária para consulta/renovação")
@@ -248,7 +270,8 @@ class ActiveDirectoryAuthProvider(AuthProviderInterface):
 
 
 class AuthHandler:
-    def __init__(self):
+    def __init__(self) -> None:
+        """Valida a configuração de sessão e escolhe o provedor de identidade (AD ou Mock em dev)."""
         if ACCESS_TOKEN_MINUTES < 1 or REFRESH_TOKEN_EXP_DAYS < 1 or SESSION_REFRESH_HOURS < 1:
             raise RuntimeError("Durações de sessão inválidas")
         if len(JWT_SECRET) < 32:
@@ -273,23 +296,26 @@ class AuthHandler:
             log.warning("Autenticação Mock ativada exclusivamente para desenvolvimento")
 
     def authenticate_user(self, username: str, password: str) -> dict:
+        """Autentica no provedor configurado."""
         return self.provider.authenticate_user(username, password)
 
     def search_ad_user(self, username: str) -> dict:
+        """Consulta um login no provedor configurado."""
         return self.provider.search_user(username)
 
     async def authorize_user(self, username: str, groups: list[str], db: AsyncSession) -> AuthorizedUser:
+        """Exige usuário ativo em authorized_users, com perfil válido e grupos do AD exigidos; 403 caso contrário."""
         username = normalize_username(username)
         result = await db.execute(select(AuthorizedUser).where(AuthorizedUser.username == username))
         local_user = result.scalar_one_or_none()
         if not local_user or not local_user.active or local_user.role not in ROLES:
             raise HTTPException(403, "Usuário não autorizado para o SAP")
-        groups_for_role = _role_group_policy().get(local_user.role)
-        if groups_for_role and not groups_for_role.intersection(g.casefold() for g in groups):
+        if not grupos_permitem_perfil(local_user.role, groups):
             raise HTTPException(403, "Perfil sem grupo corporativo necessário")
         return local_user
 
     def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
+        """Emite o JWT de acesso (curto) com login, perfil, grupos e dados profissionais do próprio usuário."""
         username = normalize_username(data.get("username", data.get("sub", "")))
         role = data.get("role")
         if role not in ROLES:
@@ -315,10 +341,10 @@ class AuthHandler:
         ttl = timedelta(days=REFRESH_TOKEN_EXP_DAYS) if remember_me else timedelta(hours=SESSION_REFRESH_HOURS)
         db.add(RefreshToken(user_id=normalize_username(user_id), token=_hash_token(raw),
                             groups={"remember_me": bool(remember_me)}, expires_at=now_utc() + ttl))
-        db.add(AuditLog(usuario=user_id, categoria="SEGURANCA", acao="LOGIN",
-                        recurso="sessao", dados_anteriores=None,
-                        dados_novos='{"sessao":"criada"}', ip_origem=ip))
         try:
+            await registrar_auditoria(db, usuario=user_id, categoria="SEGURANCA", acao="LOGIN",
+                                      recurso="sessao", dados_novos={"sessao": "criada"},
+                                      ip_origem=ip, commit=False)
             await db.commit()
         except Exception:
             await db.rollback()
@@ -326,9 +352,11 @@ class AuthHandler:
         return raw
 
     async def verify_refresh_token(self, raw: str, db: AsyncSession) -> RefreshToken:
+        """Busca o refresh token ativo (não revogado e não expirado); 401 caso contrário."""
         if not raw or len(raw) > 512:
             raise HTTPException(401, "Sessão expirada ou inválida")
-        result = await db.execute(select(RefreshToken).where(RefreshToken.token == _hash_token(raw)))
+        result = await db.execute(select(RefreshToken).where(RefreshToken.token == _hash_token(raw),
+                                                             RefreshToken.deleted_at.is_(None)))
         token = result.scalar_one_or_none()
         if not token or token.expires_at <= now_utc():
             raise HTTPException(401, "Sessão expirada ou inválida")
@@ -336,12 +364,14 @@ class AuthHandler:
 
     async def rotate_refresh_token(self, raw: str, db: AsyncSession, username: str,
                                    remember_me: bool, ip: str | None = None) -> str:
-        """Apenas uma requisição concorrente consome cada refresh token."""
+        """Apenas uma requisição concorrente consome cada refresh token (exclusão lógica)."""
         raw_new = secrets.token_urlsafe(48)
         consumed = await db.execute(
-            delete(RefreshToken).where(RefreshToken.token == _hash_token(raw),
+            update(RefreshToken).where(RefreshToken.token == _hash_token(raw),
                                        RefreshToken.user_id == username,
-                                       RefreshToken.expires_at > now_utc())
+                                       RefreshToken.expires_at > now_utc(),
+                                       RefreshToken.deleted_at.is_(None))
+            .values(deleted_at=now_utc())
             .returning(RefreshToken.user_id)
         )
         if consumed.scalar_one_or_none() is None:
@@ -350,27 +380,32 @@ class AuthHandler:
         ttl = timedelta(days=REFRESH_TOKEN_EXP_DAYS) if remember_me else timedelta(hours=SESSION_REFRESH_HOURS)
         db.add(RefreshToken(user_id=username, token=_hash_token(raw_new),
                             groups={"remember_me": remember_me}, expires_at=now_utc() + ttl))
-        db.add(AuditLog(usuario=username, categoria="SEGURANCA", acao="RENOVAR_SESSAO",
-                        recurso="sessao", dados_anteriores='{"sessao":"anterior"}',
-                        dados_novos='{"sessao":"renovada"}', ip_origem=ip))
         try:
+            await registrar_auditoria(db, usuario=username, categoria="SEGURANCA", acao="RENOVAR_SESSAO",
+                                      recurso="sessao", dados_anteriores={"sessao": "anterior"},
+                                      dados_novos={"sessao": "renovada"}, ip_origem=ip, commit=False)
             await db.commit()
         except Exception:
             await db.rollback()
             raise
         return raw_new
 
-    async def invalidate_refresh_token(self, raw: str, db: AsyncSession, ip: str | None = None):
+    async def invalidate_refresh_token(self, raw: str, db: AsyncSession, ip: str | None = None) -> None:
+        """Revoga o refresh token (exclusão lógica) e audita o logout na mesma transação."""
         if not raw or len(raw) > 512:
             return
-        result = await db.execute(select(RefreshToken.user_id).where(RefreshToken.token == _hash_token(raw)))
+        result = await db.execute(
+            update(RefreshToken).where(RefreshToken.token == _hash_token(raw),
+                                       RefreshToken.deleted_at.is_(None))
+            .values(deleted_at=now_utc())
+            .returning(RefreshToken.user_id)
+        )
         user_id = result.scalar_one_or_none()
         if user_id:
-            await db.execute(delete(RefreshToken).where(RefreshToken.token == _hash_token(raw)))
-            db.add(AuditLog(usuario=user_id, categoria="SEGURANCA", acao="LOGOUT",
-                            recurso="sessao", dados_anteriores='{"sessao":"ativa"}',
-                            dados_novos='{"sessao":"revogada"}', ip_origem=ip))
             try:
+                await registrar_auditoria(db, usuario=user_id, categoria="SEGURANCA", acao="LOGOUT",
+                                          recurso="sessao", dados_anteriores={"sessao": "ativa"},
+                                          dados_novos={"sessao": "revogada"}, ip_origem=ip, commit=False)
                 await db.commit()
             except Exception:
                 await db.rollback()
@@ -378,6 +413,7 @@ class AuthHandler:
 
     async def decode_token(self, token: str = Depends(oauth2_scheme),
                            db: AsyncSession = Depends(get_app_db_session)) -> dict:
+        """Valida o JWT e relê o perfil no banco a cada requisição (revogação imediata)."""
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"],
                                  options={"require": ["exp", "iat", "sub", "typ"]})
@@ -394,12 +430,13 @@ class AuthHandler:
                 "email": payload.get("email", []),
                 "title": payload.get("title", [])}
 
-    def require_roles(self, *roles: str):
+    def require_roles(self, *roles: str) -> Callable[..., Awaitable[dict]]:
         """Usar como Depends(auth_handler.require_roles('RECEPCAO', ...)) em rotas SAP."""
         if not roles or any(role not in ROLES for role in roles):
             raise ValueError("Lista de perfis RBAC inválida")
 
-        async def dependency(current_user: dict = Depends(self.decode_token)):
+        async def dependency(current_user: dict = Depends(self.decode_token)) -> dict:
+            """Libera a rota só para os perfis informados; 403 caso contrário."""
             if current_user.get("role") not in roles:
                 raise HTTPException(403, "Sem permissão para esta operação")
             return current_user

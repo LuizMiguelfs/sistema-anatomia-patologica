@@ -9,6 +9,7 @@ import logging
 from typing import Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.audit_log import AuditLog, CATEGORIAS_AUDITORIA
+from .crypto_helper import cifrar_campos_paciente
 
 logger = logging.getLogger("audit")
 
@@ -33,6 +34,10 @@ async def registrar_auditoria(
     Use `commit=False` quando a alteração auditada estiver na MESMA sessão: o log é apenas
     enviado ao banco (flush) e só é gravado no commit do chamador, junto com a alteração.
     Assim, ou os dois são gravados, ou nenhum é (RN-04).
+
+    Em registros NEGOCIO_CLINICO, os campos que identificam o paciente (CAMPOS_PACIENTE: nome,
+    CPF, CNS, prontuário...) são gravados cifrados com AES-256; o resto fica legível.
+    A leitura pela API decifra.
 
     Exemplos usando os perfis reais do sistema (ADMINISTRADOR, MEDICO, ENFERMAGEM):
         # 1. Categoria SEGURANCA (Ex: ADMINISTRADOR alterando perfil):
@@ -64,6 +69,9 @@ async def registrar_auditoria(
         raise ValueError(f"Categoria de auditoria inválida: '{categoria}'. Use uma de {CATEGORIAS_AUDITORIA}.")
 
     try:
+        if categoria == "NEGOCIO_CLINICO":
+            dados_anteriores = cifrar_campos_paciente(dados_anteriores)
+            dados_novos = cifrar_campos_paciente(dados_novos)
         str_anteriores = json.dumps(dados_anteriores, ensure_ascii=False, default=str) if dados_anteriores is not None else None
         str_novos = json.dumps(dados_novos, ensure_ascii=False, default=str) if dados_novos is not None else None
 

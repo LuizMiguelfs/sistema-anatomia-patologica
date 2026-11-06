@@ -13,7 +13,8 @@ class DatabaseManager:
     """
     Manages asynchronous database connections and sessions for a specific DSN.
     """
-    def __init__(self, dsn: str):
+    def __init__(self, dsn: str) -> None:
+        """Cria o engine assíncrono e a fábrica de sessões para o DSN informado."""
         self.engine: AsyncEngine = create_async_engine(dsn, echo=False) # Set echo=False to reduce log verbosity
         self.async_session_maker = sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
@@ -26,7 +27,7 @@ class DatabaseManager:
         async with self.async_session_maker() as session:
             yield session
 
-    async def close_connection(self):
+    async def close_connection(self) -> None:
         """
         Closes all connections in the engine's connection pool.
         """
