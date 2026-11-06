@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `Login.vue` | `/login` | `src/routers/auth.py` | Login e recuperação de sessão |
 | `Home.vue` | `/` | `GET /api/dashboard/resumo` | Indicadores do painel (podem ser demonstrativos) |
-| `Pacientes.vue` | `/pacientes` | `/api/pacientes` (verificar prefixo no OpenAPI) | Consulta/cadastro conforme capacidades do provedor |
+| `Pacientes.vue` | `/pacientes` | `/api/pacientes` | Consulta/cadastro conforme capacidades do provedor |
 | `Configuracoes.vue` | `/configuracoes` | `/api/admin/*` | Administração e auditoria conforme privilégios |
 
 O backend ainda expõe `GET /api/auditoria/historico`, autenticado, para histórico de um recurso. A documentação interativa de endpoints é fornecida pela aplicação em `/docs`.
