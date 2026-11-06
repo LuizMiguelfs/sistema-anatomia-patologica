@@ -22,11 +22,11 @@ from ldap3 import ALL, SUBTREE, SIMPLE, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPBindError, LDAPException
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.utils.dn import parse_dn
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings  # valida configurações na inicialização
-from ..models.audit_log import AuditLog
+from ..helpers.audit_helper import registrar_auditoria
 from ..models.authorized_user import AuthorizedUser
 from ..models.refresh_token import RefreshToken
 from ..resources.database import get_app_db_session
@@ -315,10 +315,10 @@ class AuthHandler:
         ttl = timedelta(days=REFRESH_TOKEN_EXP_DAYS) if remember_me else timedelta(hours=SESSION_REFRESH_HOURS)
         db.add(RefreshToken(user_id=normalize_username(user_id), token=_hash_token(raw),
                             groups={"remember_me": bool(remember_me)}, expires_at=now_utc() + ttl))
-        db.add(AuditLog(usuario=user_id, categoria="SEGURANCA", acao="LOGIN",
-                        recurso="sessao", dados_anteriores=None,
-                        dados_novos='{"sessao":"criada"}', ip_origem=ip))
         try:
+            await registrar_auditoria(db, usuario=user_id, categoria="SEGURANCA", acao="LOGIN",
+                                      recurso="sessao", dados_novos={"sessao": "criada"},
+                                      ip_origem=ip, commit=False)
             await db.commit()
         except Exception:
             await db.rollback()
@@ -328,7 +328,8 @@ class AuthHandler:
     async def verify_refresh_token(self, raw: str, db: AsyncSession) -> RefreshToken:
         if not raw or len(raw) > 512:
             raise HTTPException(401, "Sessão expirada ou inválida")
-        result = await db.execute(select(RefreshToken).where(RefreshToken.token == _hash_token(raw)))
+        result = await db.execute(select(RefreshToken).where(RefreshToken.token == _hash_token(raw),
+                                                             RefreshToken.deleted_at.is_(None)))
         token = result.scalar_one_or_none()
         if not token or token.expires_at <= now_utc():
             raise HTTPException(401, "Sessão expirada ou inválida")
@@ -336,12 +337,14 @@ class AuthHandler:
 
     async def rotate_refresh_token(self, raw: str, db: AsyncSession, username: str,
                                    remember_me: bool, ip: str | None = None) -> str:
-        """Apenas uma requisição concorrente consome cada refresh token."""
+        """Apenas uma requisição concorrente consome cada refresh token (exclusão lógica)."""
         raw_new = secrets.token_urlsafe(48)
         consumed = await db.execute(
-            delete(RefreshToken).where(RefreshToken.token == _hash_token(raw),
+            update(RefreshToken).where(RefreshToken.token == _hash_token(raw),
                                        RefreshToken.user_id == username,
-                                       RefreshToken.expires_at > now_utc())
+                                       RefreshToken.expires_at > now_utc(),
+                                       RefreshToken.deleted_at.is_(None))
+            .values(deleted_at=now_utc())
             .returning(RefreshToken.user_id)
         )
         if consumed.scalar_one_or_none() is None:
@@ -350,10 +353,10 @@ class AuthHandler:
         ttl = timedelta(days=REFRESH_TOKEN_EXP_DAYS) if remember_me else timedelta(hours=SESSION_REFRESH_HOURS)
         db.add(RefreshToken(user_id=username, token=_hash_token(raw_new),
                             groups={"remember_me": remember_me}, expires_at=now_utc() + ttl))
-        db.add(AuditLog(usuario=username, categoria="SEGURANCA", acao="RENOVAR_SESSAO",
-                        recurso="sessao", dados_anteriores='{"sessao":"anterior"}',
-                        dados_novos='{"sessao":"renovada"}', ip_origem=ip))
         try:
+            await registrar_auditoria(db, usuario=username, categoria="SEGURANCA", acao="RENOVAR_SESSAO",
+                                      recurso="sessao", dados_anteriores={"sessao": "anterior"},
+                                      dados_novos={"sessao": "renovada"}, ip_origem=ip, commit=False)
             await db.commit()
         except Exception:
             await db.rollback()
@@ -363,14 +366,18 @@ class AuthHandler:
     async def invalidate_refresh_token(self, raw: str, db: AsyncSession, ip: str | None = None):
         if not raw or len(raw) > 512:
             return
-        result = await db.execute(select(RefreshToken.user_id).where(RefreshToken.token == _hash_token(raw)))
+        result = await db.execute(
+            update(RefreshToken).where(RefreshToken.token == _hash_token(raw),
+                                       RefreshToken.deleted_at.is_(None))
+            .values(deleted_at=now_utc())
+            .returning(RefreshToken.user_id)
+        )
         user_id = result.scalar_one_or_none()
         if user_id:
-            await db.execute(delete(RefreshToken).where(RefreshToken.token == _hash_token(raw)))
-            db.add(AuditLog(usuario=user_id, categoria="SEGURANCA", acao="LOGOUT",
-                            recurso="sessao", dados_anteriores='{"sessao":"ativa"}',
-                            dados_novos='{"sessao":"revogada"}', ip_origem=ip))
             try:
+                await registrar_auditoria(db, usuario=user_id, categoria="SEGURANCA", acao="LOGOUT",
+                                          recurso="sessao", dados_anteriores={"sessao": "ativa"},
+                                          dados_novos={"sessao": "revogada"}, ip_origem=ip, commit=False)
                 await db.commit()
             except Exception:
                 await db.rollback()
