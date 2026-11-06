@@ -54,7 +54,7 @@ Os critérios de negócio estão em `02-requisitos.md` e `03-casos-uso.md`. Este
 1. Autenticação, sessão, refresh e papéis: `src/auth`, `src/routers/auth.py`, `frontend/src/stores/auth.ts`.
 2. Auditoria, logs, health e administração (inclui gestão de usuários): `src/models/audit_log.py`, `src/routers/admin.py`, `src/routers/usuarios.py`, `src/routers/health.py`, `frontend/src/views/Configuracoes.vue`.
 3. Pacientes e múltiplas fontes: `src/providers/*paciente*`, `src/controllers/paciente_controller.py`, `frontend/src/views/Pacientes.vue`.
-4. Casos de uso centrais e workflow clínico: módulo de casos (branch `feature/modulo-casos`).
+4. Casos de uso centrais e workflow clínico: `src/routers/caso.py`, `src/controllers/caso_controller.py`, `src/providers/*caso*` e `*aghu_solicitacao*`, `src/models/caso.py`, `frontend/src/views/Casos.vue`, `frontend/src/stores/caso.ts`.
 5. Dashboard e agregações: `src/routers/dashboard.py`, `frontend/src/views/Home.vue`.
 6. Repositório, conexões, rotas, navegação, SQL compartilhado, migrações, documentação e validação conjunta.
 

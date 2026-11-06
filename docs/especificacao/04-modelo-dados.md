@@ -39,7 +39,9 @@ O banco AGHU não é migrado pelo Alembic local. Em produção, o usuário de co
 - **Caso = solicitação do AGHU.** Cada solicitação gera um caso; não existe caso sem solicitação (RN-02).
 - **Congelação (CO) e Histopatológico (HP)** chegam como duas solicitações e geram dois casos.
 - **Identificador interno:** `SIGLA-NNNN/AA` (ex.: `HP-0001/26`). `SIGLA` ∈ {HP, CO, IHQ, CG, CCV}; `NNNN` é sequencial **por sigla**, com quatro dígitos, e recomeça em 0001 a cada ano; `AA` são os dois últimos dígitos do ano. O identificador é único.
-- Dados de paciente gravados na tabela de casos seguem a regra de AES-256 do `SPEC.md`.
+- Tabelas: `casos`, `caso_amostras`, `caso_movimentacoes` (append-only), `caso_inconformidades`, `fluxo_transicoes` (fluxo por tipo de exame, semeado pela migração) e `caso_sequencias` (numeração por sigla e ano). Modelos em `src/models/caso.py`; migração `20261105_casos_fluxo`, depois de `e5a9c4d7b210`.
+- `casos.paciente_nome` e `casos.prontuario_aghu` ficam cifrados com AES-256. A busca por prontuário usa `casos.prontuario_indice` (HMAC-SHA256 do prontuário só com dígitos). `casos.paciente_codigo_aghu` é a chave técnica de vínculo com o AGHU e fica em claro.
+- O caso é localizado pelo número da solicitação do AGHU (código do exame), pelo identificador interno ou pelo prontuário.
 
 ## Regras de Integridade
 * Trilha de auditoria obrigatória em `audit_logs` para mutações e proibição de exclusão física de registros de auditoria.
