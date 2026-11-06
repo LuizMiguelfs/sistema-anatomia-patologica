@@ -1,13 +1,13 @@
 """Módulo de Casos: casos, amostras, movimentações, inconformidades e fluxo configurável.
 
 Revision ID: 20261105_casos_fluxo
-Revises: 8a2efbe37bb6
+Revises: e5a9c4d7b210
 """
 import sqlalchemy as sa
 from alembic import op
 
 revision = "20261105_casos_fluxo"
-down_revision = down_revision = "8a2efbe37bb6"
+down_revision = "e5a9c4d7b210"  # depois das migrações do main (head único)
 branch_labels = None
 depends_on = None
 
@@ -99,5 +99,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for tabela in ("fluxo_transicoes", "caso_inconformidades", "caso_movimentacoes", "caso_amostras", "casos"):
-        op.drop_table(tabela)
+    """Sem downgrade destrutivo: apagar as tabelas perderia casos e histórico (sem exclusão física)."""
+    raise RuntimeError("Downgrade desabilitado: retenção obrigatória dos casos e do histórico")
