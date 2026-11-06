@@ -1,74 +1,35 @@
-# Modelo de Dados e Dicionário
+# 04 — Modelo de dados e persistência
 
-## 1. Modelo Entidade-Relacionamento
-```mermaid
-erDiagram
-    PACIENTE ||--o{ PRONTUARIO : possui
-    PACIENTE {
-        string nome
-        string cpf
-        string cns
-        date data_nascimento
-    }
-    PRONTUARIO ||--|{ EVOLUCAO : contem
-    PRONTUARIO {
-        int id
-        datetime data_criacao
-    }
-    EVOLUCAO {
-        string descricao
-        string responsavel_crm
-    }
-    AUDIT_LOG {
-        int id
-        datetime created_at
-        string usuario
-        string categoria
-        string acao
-        string recurso
-        json dados_anteriores
-        json dados_novos
-        string ip_origem
-    }
+## Fontes de dados
+
+O framework utiliza **dois contextos de persistência independentes**:
+
+| Contexto | Banco | Configuração | Responsabilidade |
+|---|---|---|---|
+| Aplicação (SAP) | SQLite assíncrono | `APP_DB_URL` (ou `SQLITE_DSN`) | `authorized_users`, `refresh_tokens`, `audit_logs` |
+| AGHU | PostgreSQL assíncrono | `POSTGRES_DSN` | Consulta de pacientes e dados da origem, sem escrita em produção |
+| Desenvolvimento offline | CSV | `PACIENTE_CSV_PATH` | Simulação do catálogo de pacientes sem AGHU |
+
+O provedor de pacientes é selecionado por `PACIENTE_PROVIDER_TYPE` em `src/config.py`. Não confundir as informações externas do AGHU com as entidades locais do SAP. A API pode expor dados de pacientes sem criar uma tabela local de pacientes.
+
+## Entidades persistidas pela aplicação
+
+- `authorized_users`: identificação, papel, situação ativa e timestamps. Controle de autorização local complementar à autenticação de rede.
+- `refresh_tokens`: tokens de renovação, identificação do usuário, expiração, grupos e data de criação. Tratar como dados sensíveis; jamais registrar tokens nos logs.
+- `audit_logs`: usuário, categoria, ação, recurso, valores anteriores/novos, origem e timestamp. Registros históricos devem permanecer imutáveis.
+
+O esquema canônico das tabelas locais é definido em `src/models/authorized_user.py`, `src/models/refresh_token.py` e `src/models/audit_log.py` e nas revisões Alembic. Referências a `PRONTUARIO` e `EVOLUCAO` em propostas anteriores eram **modelos conceituais**, não tabelas comprovadamente implementadas neste repositório.
+
+## Migrações
+
+Cadeia linear existente: `df72b10ec0f3` → `8a2efbe37bb6` → `4b1f20261103`. O Alembic deve reportar **um head**. A revisão intermediária foi ajustada para não apagar `refresh_tokens` durante instalações novas. Migrações que já tenham rodado no ambiente de equipe exigem revisão e backup antes de reaplicar ou alterar a versão registrada.
+
+Com banco de teste e backup disponível:
+
+```bash
+uv run alembic heads
+uv run alembic current
+uv run alembic upgrade head
 ```
 
-## 2. Dicionário de Dados
-* Tabelas: `PACIENTES`, `PRONTUARIOS`, `REFRESH_TOKENS`, `AUDIT_LOGS`.
-
-### [SCHEMA] Esquema JSON - AuditLog
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AuditLog",
-  "type": "object",
-  "properties": {
-    "usuario": { "type": "string" },
-    "categoria": { "type": "string", "enum": ["SEGURANCA", "NEGOCIO_CLINICO", "CONFIGURACAO"] },
-    "acao": { "type": "string" },
-    "recurso": { "type": "string" },
-    "dados_anteriores": { "type": ["object", "null"] },
-    "dados_novos": { "type": ["object", "null"] },
-    "ip_origem": { "type": ["string", "null"] }
-  },
-  "required": ["usuario", "categoria", "acao", "recurso"]
-}
-```
-
-### [SCHEMA] Esquema JSON - Paciente
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Paciente",
-  "type": "object",
-  "properties": {
-    "nome": { "type": "string", "minLength": 3 },
-    "cpf": { "type": "string", "pattern": "^[0-9]{11}$" },
-    "cns": { "type": "string", "pattern": "^[0-9]{15}$" },
-    "data_nascimento": { "type": "string", "format": "date" }
-  },
-  "required": ["nome", "cpf", "data_nascimento"]
-}
-```
-
-## 3. Regras de Integridade
-* Trilha de auditoria obrigatória em `audit_logs` para mutações e proibição de exclusão física de registros de auditoria.
+O banco AGHU não é migrado pelo Alembic local. Em produção, o usuário de conexão do AGHU deve ter somente permissão `SELECT`.

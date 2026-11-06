@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 # Base para os modelos do banco de dados da aplicação (SQLite)
 Base = declarative_base()
@@ -24,10 +24,7 @@ class DatabaseManager:
         Provides an asynchronous session for database operations.
         """
         async with self.async_session_maker() as session:
-            try:
-                yield session
-            finally:
-                await session.close()
+            yield session
 
     async def close_connection(self):
         """

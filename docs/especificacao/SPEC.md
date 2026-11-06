@@ -1,45 +1,42 @@
-# SPEC.md - Contrato de Desenvolvimento (SDD)
+# SPEC — Contrato de integração do framework SETISD/HC-UFPE
 
-## 1. Visão Geral e Resultados Esperados
-Este documento é a ÚNICA fonte de verdade para a orquestração do desenvolvimento. O objetivo é construir um sistema hospitalar seguro e em conformidade com a LGPD.
+## Fonte de verdade
 
-### Objetivos de Alto Nível
-- [ ] Implementar autenticação via LDAP/AD.
-- [ ] Gerenciar cadastro de pacientes (CNS/CPF).
-- [ ] Garantir trilhas de auditoria imutáveis.
+Os critérios de negócio estão em [02-requisitos](02-requisitos.md) e [03-casos-uso](03-casos-uso.md). O modelo de dados, as interfaces e a implantação estão descritos em [04-modelo-dados](04-modelo-dados.md), [05-interfaces](05-interfaces.md) e [06-arquitetura](06-arquitetura.md). Este arquivo **não substitui** requisitos clínicos e regras institucionais.
 
-## 2. Contexto do Projeto (Documentação Imutável)
-As definições detalhadas estão distribuídas nos seguintes documentos:
-- [Validação e Fluxo de Negócio](00-validacao-negocio.md) (Fase 0 - Negócio)
-- [Visão](01-visao.md)
-- [Requisitos](02-requisitos.md)
-- [Casos de Uso](03-casos-uso.md)
-- [Modelo de Dados](04-modelo-dados.md)
-- [Interfaces](05-interfaces.md)
-- [Arquitetura](06-arquitetura.md)
-- [Glossário](07-glossario.md)
+## Divisão de responsabilidade
 
-## 3. Limites de Escopo e Guardrails (Anti-Patterns)
-**A IA DEVE:**
-- Seguir rigorosamente o Modelo de Dados definido em `04-modelo-dados.md`.
-- Implementar testes unitários para cada funcionalidade nova.
-- Utilizar criptografia AES-256 para dados sensíveis.
+1. Autenticação, sessão, refresh e papéis: `src/auth`, `src/routers/auth.py`, `frontend/src/stores/auth.ts`.
+2. Auditoria, logs, health e administração: `src/models/audit_log.py`, `src/routers/admin.py`, `src/routers/health.py`.
+3. Pacientes e múltiplas fontes: `src/providers/*paciente*`, `src/controllers/paciente_controller.py`, `frontend/src/views/Pacientes.vue`.
+4. Casos de uso centrais e workflow clínico: implementação/integração dependente do módulo do membro 4.
+5. Dashboard e agregações: `src/routers/dashboard.py`, `frontend/src/views/Home.vue`.
+6. Repositório, conexões, rotas, navegação, SQL compartilhado, migrações, documentação e validação conjunta.
 
-**A IA NÃO DEVE:**
-- Criar dependências externas não documentadas em `06-arquitetura.md`.
-- Implementar exclusão física de registros (usar Soft Delete).
-- Burlar o sistema de RBAC (Role-Based Access Control).
+## Critérios para aceitar a integração
 
-## 4. Task Breakdown (Plano de Implementação)
-### Fase 1: Infraestrutura e Dados
-- [ ] [TASK-001] Validar esquemas de banco de dados conforme `04-modelo-dados.md`.
-- [ ] [TASK-002] Configurar ambiente de auditoria de logs.
+- [x] Rotas Vue reunidas em um único array com guarda de autenticação; páginas de exemplo retiradas.
+- [x] Menu com Dashboard, Pacientes e Configurações; rota de histórico de auditoria incluída na API.
+- [x] Engines e sessões administradas pelo ciclo de vida do FastAPI.
+- [x] `audit_framework.py` executa sem `NameError`.
+- [x] Migrações com IDs encadeados em uma única linha e revisão intermediária não destrutiva para instalações novas.
+- [ ] `pytest -q` integral em ambiente com dependências instaladas e configurações de teste.
+- [ ] `npm ci && npm run build` e navegação testadas no navegador.
+- [ ] Migrações executadas e conferidas em cópia de banco real com backup.
+- [ ] Integração do módulo 4 e fluxos complementares homologados com os outros membros.
+- [ ] Testes reais de LDAP/AGHU, permissões, retenção e privacidade aprovados pela equipe responsável.
 
-### Fase 2: Funcionalidades Essenciais
-- [ ] [TASK-003] Implementar Módulo de Autenticação (RF001).
-- [ ] [TASK-004] Implementar Cadastro de Pacientes (RF002).
+## Regras de mudança
 
-## 5. Critérios de Verificação Global
-- [ ] 100% de cobertura em rotas de autenticação.
-- [ ] Zero vulnerabilidades críticas no lint de segurança.
-- [ ] Conformidade total com os esquemas JSON/OpenAPI.
+Nunca colocar `.env`, tokens ou dados reais de pacientes no Git. Os módulos não devem importar implementações concretas diretamente de outros módulos quando houver interface de Provider. Para SQL dinâmico de usuário, usar bind parameters, não substituição textual. Não apagar logs de auditoria. Revisar migrações com o time antes de aplicá-las em banco já utilizado.
+
+## Validação recomendada
+
+```bash
+python audit_framework.py
+uv run pytest -q
+cd frontend && npm ci && npm run build
+uv run alembic heads
+```
+
+**Observação:** aprovação de um linter estrutural não equivale a homologação operacional, clínica ou de segurança.

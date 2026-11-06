@@ -1,23 +1,45 @@
-# Arquitetura e Segurança
+# 06 — Arquitetura, implantação e segurança
 
-## 1. Stack Técnica
-* Front-end, Back-end e Banco de Dados.
+## Camadas
 
-## 2. Conformidade LGPD
-* Anonimização e gestão de consentimento (TCLE).
+```text
+Vue 3 / Pinia / Vue Router / Axios
+           ↓  /api/*
+FastAPI (src/main.py, src/routers/)
+           ↓
+Controllers (src/controllers/)
+           ↓
+Provider interfaces → implementações CSV/PostgreSQL/SQLite
+           ↓
+Resources e SQL parametrizado (src/resources/, src/providers/sql/)
+```
 
-## 3. Acessos
-* RBAC e MFA.
+- `src/main.py`: ciclo de vida, engines de banco, middlewares, rotas e entrega da SPA.
+- `src/resources/database.py`: sessões assíncronas e fechamento dos pools. `src/resources/postgres.py`: camada de compatibilidade, sem engine global no import.
+- `src/dependencies.py`: seleção/injeção de provedores usados pelos routers.
+- `src/helpers/sql_helper.py`: carregamento de SQL da área `providers/sql`; usar parâmetros vinculados `:nome` para valores do usuário. `create_query` é legado e **não deve** receber input da API.
+- `alembic/versions`: histórico das migrações do banco *local* da aplicação.
 
-## 4. Guardrails para IA (SDD)
-Para manter a integridade sistêmica, os assistentes de IA devem aderir às seguintes restrições:
+## Segurança e privacidade
 
-### Escopo Positivo (O que fazer)
-- **Documentação de Código**: Comentar funções complexas seguindo o padrão JSDoc/TSDoc.
-- **Tratamento de Erros**: Utilizar blocos try-catch com logs de erro padronizados.
-- **Testes**: Criar um arquivo de teste `.spec.ts` para cada novo controller ou service.
+JWT e cookies HttpOnly são administrados no módulo de autenticação. Proteção de rotas (autenticação e permissões), RBAC e auditoria devem ser validados com perfis reais da instituição. Não imprimir tokens, senhas, dados clínicos ou DSNs nos logs. Segurança e conformidade LGPD requerem revisão institucional e não podem ser inferidas apenas do auditor estático.
 
-### Escopo Negativo (O que NÃO fazer - Anti-Patterns)
-- **No Hard Deletes**: Proibido o uso de `DELETE` SQL. Utilizar coluna `deleted_at`.
-- **No Secrets in Code**: Proibido salvar chaves de API ou senhas no código; utilizar `.env`.
-- **No Refactoring Unasked**: Não alterar arquivos de infraestrutura ou configuração global sem instrução explícita no `SPEC.md`.
+O backend oferece `GET /api/health` para diagnóstico. O painel só deve anunciar indicadores reais quando conectado a fontes reais. `ALLOWED_ORIGINS=*` serve apenas para desenvolvimento; configurar origens explícitas em produção.
+
+## Execução
+
+```bash
+cp .env.example .env             # ajustar segredos e provedores com valores locais
+uv sync                          # backend
+cd frontend && npm ci && npm run build && cd ..
+uv run alembic heads
+uv run pytest -q
+python audit_framework.py
+uv run uvicorn src.main:app --host 127.0.0.1 --port 8000
+```
+
+**Atenção**: migrações devem ser aplicadas a banco de teste com backup e planejamento de deploy; `src/main.py` ainda usa `create_all` na inicialização. A imagem Docker usa `compose.yaml` e porta 8000. A integração com rede corporativa depende de infraestrutura não embutida no repositório.
+
+## Responsabilidade dos módulos
+
+Autenticação (1), auditoria/admin (2), pacientes (3), fluxo de casos (4), dashboard (5) e integração/infraestrutura/documentação (6). Os módulos 4 e 5 devem informar suas rotas e regras de negócio antes da homologação final.
