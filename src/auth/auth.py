@@ -104,6 +104,12 @@ def _role_group_policy() -> dict[str, set[str]]:
         raise RuntimeError("SAP_ROLE_GROUP_MAP deve ser JSON {PERFIL: [GRUPO_AD]}") from exc
 
 
+def grupos_permitem_perfil(role: str, groups: list[str]) -> bool:
+    """True se os grupos do AD atendem ao SAP_ROLE_GROUP_MAP para o perfil (sem mapa: sempre True)."""
+    exigidos = _role_group_policy().get(role)
+    return not exigidos or bool(exigidos.intersection(g.casefold() for g in groups))
+
+
 class AuthProviderInterface(ABC):
     @abstractmethod
     def authenticate_user(self, username: str, password: str) -> dict: ...
@@ -284,8 +290,7 @@ class AuthHandler:
         local_user = result.scalar_one_or_none()
         if not local_user or not local_user.active or local_user.role not in ROLES:
             raise HTTPException(403, "Usuário não autorizado para o SAP")
-        groups_for_role = _role_group_policy().get(local_user.role)
-        if groups_for_role and not groups_for_role.intersection(g.casefold() for g in groups):
+        if not grupos_permitem_perfil(local_user.role, groups):
             raise HTTPException(403, "Perfil sem grupo corporativo necessário")
         return local_user
 

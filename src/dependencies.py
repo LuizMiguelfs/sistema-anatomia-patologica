@@ -44,3 +44,15 @@ def get_auditoria_provider(
 ) -> AuditoriaProviderInterface:
     """Provedor de leitura da trilha de auditoria (banco local da aplicação)."""
     return AuditoriaSqliteProvider(session=session)
+
+
+# 4. Gestão de usuários: usuários autorizados (`authorized_users`) no banco local da aplicação.
+from .providers.interfaces.usuario_provider_interface import UsuarioProviderInterface
+from .providers.implementations.usuario_sqlite_provider import UsuarioSqliteProvider
+
+
+def get_usuario_provider(
+    session: AsyncSession = Depends(get_app_db_session)
+) -> UsuarioProviderInterface:
+    """Provedor dos usuários autorizados (banco local da aplicação)."""
+    return UsuarioSqliteProvider(session=session)

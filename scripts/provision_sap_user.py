@@ -49,12 +49,14 @@ async def main():
             result = await db.execute(select(AuthorizedUser).where(AuthorizedUser.username == username))
             obj = result.scalar_one_or_none()
             previous = {"role": obj.role, "active": bool(obj.active)} if obj else None
+            nome = (info.get("displayName") or "").strip() or None
             if obj:
                 obj.role = args.role
                 obj.active = not args.deactivate
+                obj.nome = nome or obj.nome
                 obj.updated_at = datetime.now(timezone.utc)
             else:
-                obj = AuthorizedUser(username=username, role=args.role, active=not args.deactivate)
+                obj = AuthorizedUser(username=username, nome=nome, role=args.role, active=not args.deactivate)
                 db.add(obj)
             new = {"role": args.role, "active": not args.deactivate}
             await registrar_auditoria(db, usuario=actor, categoria="SEGURANCA", acao="ALTERAR_ACESSO_SAP",
