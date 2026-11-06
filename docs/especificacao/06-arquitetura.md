@@ -66,6 +66,7 @@ O backend oferece `GET /api/health` para diagnóstico. O painel só deve anuncia
 ```bash
 cp .env.example .env             # ajustar segredos e provedores com valores locais
 uv sync                          # backend
+uv run alembic upgrade head      # banco local: tabelas, triggers e dados de configuração
 cd frontend && npm ci && npm run build && cd ..
 uv run alembic heads
 uv run pytest -q

@@ -40,6 +40,8 @@ done
 # 2. Sincronizando Backend
 echo -e "\n${YELLOW}[2/4] Sincronizando Backend (Python)...${NC}"
 uv sync
+# Migrações do banco local (tabelas, triggers e dados de configuração)
+uv run alembic upgrade head || exit 1
 
 # 3. Sincronizando Frontend
 echo -e "\n${YELLOW}[3/4] Sincronizando Frontend (Node)...${NC}"

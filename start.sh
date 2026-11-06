@@ -43,6 +43,14 @@ else
     exit 1
 fi
 
+# Migrações do banco local (tabelas, triggers e dados de configuração, como os fluxos por exame)
+if uv run alembic upgrade head; then
+    echo -e "  ✅ Banco local atualizado (alembic upgrade head)."
+else
+    echo -e "${RED}❌ Erro ao aplicar as migrações do banco local. Faça backup de data/app.db e verifique.${NC}"
+    exit 1
+fi
+
 # 4. Instalação das dependências do frontend
 echo -e "\n${YELLOW}[4/6] Verificando dependências do frontend...${NC}"
 if [ -d "frontend" ]; then
