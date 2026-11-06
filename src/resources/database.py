@@ -1,7 +1,7 @@
 # src/resources/database.py
 
 from typing import AsyncGenerator
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -39,7 +39,12 @@ async def get_aghu_db_session(request: Request) -> AsyncGenerator[AsyncSession, 
     """
     Dependency for FastAPI to get an AGHU database session from the app state.
     """
-    aghu_db_manager: DatabaseManager = request.app.state.aghu_db
+    aghu_db_manager: DatabaseManager | None = getattr(request.app.state, "aghu_db", None)
+    if aghu_db_manager is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Banco do AGHU não configurado (POSTGRES_DSN ausente).",
+        )
     async for session in aghu_db_manager.get_session():
         yield session
 
