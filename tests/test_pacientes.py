@@ -58,10 +58,15 @@ def ambiente(tmp_path, monkeypatch):
 
 
 def _auditorias(client: TestClient):
-    """Lê os registros de auditoria do banco temporário."""
+    """
+    Lê os registros de auditoria de negócio do banco temporário.
+    Ignora os eventos de SEGURANCA (ex.: o LOGIN feito pela fixture), que não são deste módulo.
+    """
     async def _consulta():
         async with client.app.state.app_db.async_session_maker() as session:
-            result = await session.execute(select(AuditLog).order_by(AuditLog.id))
+            result = await session.execute(
+                select(AuditLog).where(AuditLog.categoria == "NEGOCIO_CLINICO").order_by(AuditLog.id)
+            )
             return list(result.scalars().all())
     return client.portal.call(_consulta)
 

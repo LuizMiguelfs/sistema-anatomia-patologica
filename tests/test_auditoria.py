@@ -7,7 +7,7 @@ e histórico de um recurso (/api/auditoria/historico, qualquer usuário autentic
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from tests.auditoria_helpers import _admin, _gravar, _h, _token, ambiente  # noqa: F401
+from tests.auditoria_helpers import GRUPO_TI, _admin, _gravar, _h, _token, ambiente  # noqa: F401
 
 
 # -------------------------------------------------------- consulta administrativa
@@ -17,15 +17,16 @@ def test_consulta_exige_autenticacao(ambiente):
 
 
 def test_consulta_negada_sem_grupo_ti_nem_chefia(ambiente):
-    client, _ = ambiente
-    r = client.get("/api/admin/auditoria", headers=_h(_token(["Users"])))
+    client, db_path = ambiente
+    r = client.get("/api/admin/auditoria", headers=_h(_token(db_path, ["Users"], role="RECEPCAO")))
     assert r.status_code == 403
 
 
 def test_consulta_permitida_ao_grupo_ti(ambiente):
-    client, _ = ambiente
+    client, db_path = ambiente
     _gravar(client)
-    r = client.get("/api/admin/auditoria", headers=_admin(client))
+    # Perfil local sem acesso à trilha: a permissão vem só do grupo de TI do AD.
+    r = client.get("/api/admin/auditoria", headers=_h(_token(db_path, [GRUPO_TI], role="LABORATORIO")))
     assert r.status_code == 200, r.text
     corpo = r.json()
     assert corpo["total"] == 1
@@ -36,8 +37,8 @@ def test_consulta_permitida_ao_grupo_ti(ambiente):
 
 
 def test_consulta_permitida_ao_perfil_chefia(ambiente):
-    client, _ = ambiente
-    r = client.get("/api/admin/auditoria", headers=_h(_token(["Users"], role="CHEFIA")))
+    client, db_path = ambiente
+    r = client.get("/api/admin/auditoria", headers=_h(_token(db_path, ["Users"], role="CHEFIA")))
     assert r.status_code == 200, r.text
 
 
@@ -123,7 +124,7 @@ def test_nao_existe_rota_de_escrita_na_auditoria(ambiente):
 
 # ------------------------------------------------------------ histórico (RF021)
 def test_historico_aberto_a_qualquer_usuario_autenticado(ambiente):
-    client, _ = ambiente
+    client, db_path = ambiente
     _gravar(client, recurso="caso:7", acao="REGISTRAR_RECEBIMENTO")
     _gravar(client, recurso="caso:7", acao="CONCLUIR_MACROSCOPIA")
     _gravar(client, recurso="caso:8")
@@ -131,7 +132,7 @@ def test_historico_aberto_a_qualquer_usuario_autenticado(ambiente):
 
     assert client.get("/api/auditoria/historico", params={"recurso": "caso:7"}).status_code == 401
 
-    r = client.get("/api/auditoria/historico", params={"recurso": "caso:7"}, headers=_h(_token(["Users"])))
+    r = client.get("/api/auditoria/historico", params={"recurso": "caso:7"}, headers=_h(_token(db_path, ["Users"])))
     assert r.status_code == 200, r.text
     corpo = r.json()
     assert corpo["total"] == 2  # só NEGOCIO_CLINICO, só o recurso pedido
@@ -140,14 +141,14 @@ def test_historico_aberto_a_qualquer_usuario_autenticado(ambiente):
 
 
 def test_historico_valida_formato_do_recurso(ambiente):
-    client, _ = ambiente
-    h = _h(_token(["Users"]))
+    client, db_path = ambiente
+    h = _h(_token(db_path, ["Users"]))
     assert client.get("/api/auditoria/historico", headers=h).status_code == 400
     assert client.get("/api/auditoria/historico", params={"recurso": "semdoispontos"}, headers=h).status_code == 400
 
 
 def test_historico_nao_aceita_prefixo(ambiente):
-    client, _ = ambiente
+    client, db_path = ambiente
     _gravar(client, recurso="caso:1")
-    r = client.get("/api/auditoria/historico", params={"recurso": "caso:*"}, headers=_h(_token(["Users"])))
+    r = client.get("/api/auditoria/historico", params={"recurso": "caso:*"}, headers=_h(_token(db_path, ["Users"])))
     assert r.status_code == 200 and r.json()["total"] == 0
