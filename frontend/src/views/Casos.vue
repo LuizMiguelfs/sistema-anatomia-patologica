@@ -1,11 +1,10 @@
 <!--
   View do fluxo principal do SAP: ciclo de vida do Caso (UC002, UC019, UC017, UC012, UC018).
 
-  ATENÇÃO - contratos assumidos dos componentes base (ajustar se o código real divergir):
-    DataTable : props `columns` [{ key, label }], `data` (linhas), `loading`;
-                slot de célula `#cell-<key>="{ row }"`.
-    Modal     : `v-model` (boolean), prop `title`, slot padrão e slot `#footer`.
-    Button    : props `variant` ('primary' | 'secondary' | 'danger'), `loading`, `disabled`; evento `@click`.
+  Componentes base usados (contratos reais do framework):
+    Modal  : prop `show`, evento `@close`, slots `#header`, padrão e `#footer`.
+    Button : props `variant`, `loading`, `disabled`; evento `@click`.
+  A lista usa tabela própria porque precisa de células formatadas (o DataTable só exibe texto).
 -->
 <template>
   <div class="space-y-6">
@@ -44,19 +43,33 @@
     <p v-if="erroLista" class="rounded bg-red-50 p-3 text-sm text-red-700" role="alert">{{ erroLista }}</p>
 
     <!-- Lista -->
-    <DataTable :columns="colunas" :data="store.casos" :loading="store.loading">
-      <template #cell-etapa_atual="{ row }">{{ rotuloEtapa(row.etapa_atual) }}</template>
-      <template #cell-status="{ row }">
-        <span :class="row.status === 'ARQUIVADO' ? 'bg-gray-100 text-gray-700' : 'bg-blue-50 text-blue-700'"
-              class="rounded px-2 py-0.5 text-xs font-medium">
-          {{ row.status === 'ARQUIVADO' ? 'Arquivado' : 'Em andamento' }}
-        </span>
-      </template>
-      <template #cell-criado_em="{ row }">{{ formatarData(row.criado_em) }}</template>
-      <template #cell-acoes="{ row }">
-        <Button variant="secondary" @click="abrirModalCaso(row.id)">Abrir</Button>
-      </template>
-    </DataTable>
+    <div class="w-full overflow-x-auto rounded-lg shadow-xs">
+      <table class="w-full text-left">
+        <thead>
+          <tr class="text-xs font-semibold tracking-wider text-gray-500 uppercase border-b border-gray-200 bg-gray-50">
+            <th v-for="c in colunas" :key="c.key" class="px-4 py-2">{{ c.label }}</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-100">
+          <tr v-if="store.loading"><td :colspan="colunas.length" class="px-4 py-4 text-center text-sm text-gray-500">Carregando...</td></tr>
+          <tr v-for="row in store.casos" v-else :key="row.id" class="text-sm text-gray-700 hover:bg-gray-100">
+            <td class="px-4 py-3 font-mono">{{ row.identificador_interno }}</td>
+            <td class="px-4 py-3">{{ row.solicitacao_aghu }}</td>
+            <td class="px-4 py-3">{{ row.paciente_nome }}</td>
+            <td class="px-4 py-3">{{ row.tipo_exame }}</td>
+            <td class="px-4 py-3">{{ rotuloEtapa(row.etapa_atual) }}</td>
+            <td class="px-4 py-3">
+              <span :class="row.status === 'ARQUIVADO' ? 'bg-gray-100 text-gray-700' : 'bg-blue-50 text-blue-700'"
+                    class="rounded px-2 py-0.5 text-xs font-medium">
+                {{ row.status === 'ARQUIVADO' ? 'Arquivado' : 'Em andamento' }}
+              </span>
+            </td>
+            <td class="px-4 py-3">{{ formatarData(row.criado_em) }}</td>
+            <td class="px-4 py-3"><Button variant="secondary" @click="abrirModalCaso(row.id)">Abrir</Button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <p v-if="!store.loading && !store.casos.length && buscou" class="text-sm text-gray-500">Nenhum caso encontrado para os filtros informados.</p>
 
@@ -69,7 +82,8 @@
     </div>
 
     <!-- Modal: abrir caso (UC002) -->
-    <Modal v-model="modalNovo" title="Abrir caso a partir do AGHU">
+    <Modal :show="modalNovo" @close="modalNovo = false">
+      <template #header>Abrir caso a partir do AGHU</template>
       <div class="space-y-4">
         <div class="flex gap-2">
           <input v-model="novo.solicitacao" class="flex-1 rounded border p-2 text-sm" inputmode="numeric" placeholder="Nº da solicitação no AGHU" @keyup.enter="consultarAghu" />
@@ -98,7 +112,8 @@
     </Modal>
 
     <!-- Modal: caso (detalhe, ações e histórico) -->
-    <Modal v-model="modalCaso" :title="caso ? `Caso ${caso.identificador_interno}` : 'Caso'">
+    <Modal :show="modalCaso" @close="modalCaso = false">
+      <template #header>{{ caso ? `Caso ${caso.identificador_interno}` : 'Caso' }}</template>
       <div v-if="caso" class="space-y-4 text-sm">
         <div class="grid grid-cols-2 gap-2">
           <p><strong>Paciente:</strong> {{ caso.paciente_nome }}</p>
@@ -154,13 +169,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import Button from '../components/Button.vue';
-import DataTable from '../components/DataTable.vue';
 import Modal from '../components/Modal.vue';
 import {
   mensagemErro, useCasoStore,
   type CasoDetalhe, type FiltrosCaso, type Movimentacao, type SolicitacaoAghu,
 } from '../stores/caso';
-// TODO: trocar por `useAuthStore().user?.perfil` (nome do campo conforme stores/auth.ts).
 import { useAuthStore } from '../stores/auth';
 
 const TIPOS_EXAME = ['HP', 'CO', 'CG', 'CCV'];
@@ -172,8 +185,9 @@ const ETAPAS: Record<string, string> = {
 const LIMITE = 20;
 
 const store = useCasoStore();
-const auth = useAuthStore() as any;
-const podeAbrir = computed(() => String(auth.user?.perfil ?? '').toUpperCase() === 'RECEPCAO');
+const auth = useAuthStore();
+/** Só a Recepção abre casos (o backend também checa). */
+const podeAbrir = computed(() => auth.hasRole('RECEPCAO'));
 
 const colunas = [
   { key: 'identificador_interno', label: 'Identificador' },
