@@ -16,7 +16,7 @@
 * Laboratório/Técnicos
 * Residentes
 * Validação/Preceptoria
-* Técnico Administrativo (Chefia do UACAP)
+* Técnico Administrativo (Chefia do UACAP, Unidade de Análises Clínicas e Anatomia Patológica)
 * Regulação do hospital (cadastro no AGHU dos pacientes de exames externos)
 * Bloco Cirúrgico (solicita exames e recebe a resposta da Congelação)
 
@@ -36,6 +36,7 @@
 - Apoio ao acompanhamento de materiais enviados para processamento externo, como casos de IHQ realizados em hospital conveniado.
 - Consolidação de informações que possam apoiar o faturamento e reduzir o risco de procedimentos realizados não serem devidamente registrados.
 - Disponibilização de informações gerenciais sobre volume de casos, etapas do fluxo, pendências, rejeições e tempos de processamento.
+- Gestão, pela Chefia, de quem acessa o SAP e com qual perfil.
 
 ## 4. Metas e Objetivos de Negócio
 

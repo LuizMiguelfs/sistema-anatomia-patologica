@@ -11,12 +11,12 @@
 | RF001 | Autenticação | Login via LDAP/AD do hospital. | Essencial |
 | RF002 | Controle de acesso por perfil | Perfis Recepção, Laboratório/Técnicos, Residentes, Validação/Preceptoria e Técnico Administrativo (Chefia do UACAP), cada um com permissões próprias; nenhum perfil altera dados de setores fora da sua alçada. | Essencial |
 | RF003 | Dados do AGHU (leitura) | Consultar o AGHU Slave e preencher automaticamente os dados de paciente, solicitação e amostra, sem redigitação e sem cópia manual divergente. | Essencial |
-| RF004 | Registro do caso e vínculo | Criar o caso a partir da solicitação do AGHU, com amostras sempre vinculadas à solicitação e aos identificadores de origem. Não permite registro órfão. | Essencial |
+| RF004 | Registro do caso e vínculo | Criar o caso a partir da solicitação do AGHU (cada solicitação gera um caso), com amostras sempre vinculadas à solicitação e aos identificadores de origem. Não permite registro órfão. | Essencial |
 | RF005 | Fluxo por tipo de exame | Manter a definição de etapas e transições permitidas para cada tipo de exame (HP, CO, IHQ, CG, CCV), de forma configurável. | Essencial |
-| RF006 | Recepção e conferência | Registrar o recebimento da amostra (data, hora e profissional), revisar o cadastro e gerar a etiqueta com o identificador interno. O protocolo físico assinado continua existindo, a pedido do setor. | Essencial |
+| RF006 | Recepção e conferência | Registrar o recebimento da amostra (data, hora e profissional), revisar o cadastro e gerar a etiqueta com o identificador interno (`SIGLA-NNNN/AA`, ex.: `HP-0001/26`, numeração própria de cada sigla, reiniciada a cada ano). O protocolo físico assinado continua existindo, a pedido do setor. | Essencial |
 | RF007 | Pacientes externos: Regulação | Registrar o envio dos dados do paciente externo à Regulação do hospital e o retorno do cadastro, antes de o caso seguir. | Importante |
 | RF008 | Macroscopia | Registrar a macroscopia e gerar o laudo macroscópico, que é emitido ao final da etapa e independe do laudo final. | Essencial |
-| RF009 | Congelação | Registrar o ciclo reduzido da Congelação (incluindo a análise macroscópica preliminar), o laudo da Congelação e o aviso ao Bloco Cirúrgico. Ao fim, o material volta à Recepção, que recebe no AGHU a solicitação seguinte (HP). | Importante |
+| RF009 | Congelação | Registrar o ciclo reduzido da Congelação (incluindo a análise macroscópica preliminar), o laudo da Congelação e o aviso ao Bloco Cirúrgico. Ao fim, o material volta à Recepção, que recebe no AGHU a solicitação seguinte (HP). Congelação e HP são duas solicitações e, portanto, dois casos. | Importante |
 | RF010 | Processamento técnico (HP) | Registrar início por Histotécnico ou Preparo manual, inclusão, corte, coloração e montagem. | Essencial |
 | RF011 | Processamento técnico citológico (CG/CCV) | Registrar o fluxo condicional: material líquido (centrifugação), presença de fragmento (cell-block, que passa pela bancada do HP e retorna na Coloração) e coloração, montagem e distribuição. | Importante |
 | RF012 | Material derivado | Registrar peças, cassetes, blocos e lâminas, todos rastreáveis até o caso de origem, com etapa atual consultável. | Essencial |
@@ -35,6 +35,7 @@
 | RF025 | Procedimentos faturáveis | Registrar de forma estruturada os procedimentos definidos como faturáveis (lista do ponto de decisão 8) e permitir sua consulta consolidada. | Importante |
 | RF026 | Substituição na ausência | Permitir delegar temporariamente validação e permissões da Preceptoria ou Chefia a substitutos, com registro da delegação. | Desejável |
 | RF027 | Busca de casos | Localizar casos por número da solicitação, paciente, identificador interno, tipo de exame, etapa ou status. | Importante |
+| RF028 | Gestão de usuários e perfis | A Chefia inclui no SAP um login de rede existente no AD (o nome vem do AD), escolhe o perfil, altera o perfil e inativa ou reativa o acesso. Ninguém altera o próprio perfil nem inativa o próprio acesso. Não há exclusão de usuário. Toda alteração é auditada (categoria SEGURANCA). | Essencial |
 
 ### 📌 Legenda de Níveis de Prioridade:
 - **Essencial (Alta):** Funcionalidade indispensável para o funcionamento básico da aplicação. Sem ela, o sistema não pode ir para produção (ex: autenticação, cadastros base).
@@ -46,12 +47,12 @@
 ## 2. Requisitos Não Funcionais (RNF)
 | ID | Categoria | Descrição |
 | :--- | :--- | :--- |
-| RNF001 | Criptografia | Tokens JWT assinados com HS256 e Cookies HttpOnly para Refresh Tokens. |
+| RNF001 | Criptografia | Tokens JWT assinados com HS256 e Cookies HttpOnly para Refresh Tokens. Dados sensíveis gravados pelo SAP (dados de paciente, inclusive no antes/depois da auditoria) cifrados com AES-256. |
 | RNF002 | LGPD / Auditoria | Trilha de auditoria obrigatória (antes/depois) em tabela `audit_logs` para mutações. |
 | RNF003 | Segurança HTTP | Middleware de Security Headers (anti-cache `no-store`, `X-Frame-Options: DENY`, anti-XSS). |
 | RNF004 | Governança Segredos | Proibição de hardcode e validação de env vars na inicialização (`src/config.py`). |
 | RNF005 | Integração AGHU | Acesso ao AGHU Slave somente leitura; dados do AGHU nunca são alterados pelo SAP, e dados de origem AGHU e dados do SAP ficam claramente separados no modelo. |
-| RNF006 | Integridade do histórico | Registros de histórico e auditoria são imutáveis: sem `UPDATE`/`DELETE` pela aplicação; correções geram novo registro preservando o anterior. |
+| RNF006 | Integridade do histórico | Registros de histórico e auditoria são imutáveis: sem `UPDATE`/`DELETE` pela aplicação; correções geram novo registro preservando o anterior. Nenhum registro é excluído fisicamente: exclusões são lógicas (soft delete). |
 | RNF007 | LGPD / Privacidade | Dados clínicos expostos apenas conforme o perfil; dados sensíveis não aparecem em logs de aplicação nem em mensagens de erro. |
 | RNF008 | Desempenho | Consultas de caso e painel respondem em até 3 s no percentil 95 em condições normais de uso (valor proposto, a validar com o SETISD). |
 | RNF009 | Disponibilidade | Disponível no horário de funcionamento do setor, com falha na integração com o AGHU Slave sinalizada ao usuário sem corromper registros do SAP (meta a validar com o SETISD). |
@@ -113,7 +114,7 @@ Para cada requisito, a implementação deve seguir o padrão:
 ### [CARE-RF009] Congelação
 * **Context (Contexto)**: Solicitação de Congelação recebida no AGHU; ciclo reduzido por exigir resposta rápida.
 * **Action (Ação)**: Criar fluxo reduzido com análise macroscópica preliminar, laudo da Congelação e registro do aviso ao Bloco Cirúrgico; ao final, devolver o material à Recepção para a solicitação seguinte.
-* **Result (Resultado)**: Laudo CO registrado; a solicitação de HP recebida em seguida inicia o fluxo do HP após a etapa de Corte. Se Congelação e HP formam um único caso ou dois casos vinculados ainda está em aberto (seção 6).
+* **Result (Resultado)**: Laudo CO registrado; a solicitação de HP recebida em seguida gera outro caso, que inicia o fluxo do HP após a etapa de Corte. Congelação e HP são dois casos, um por solicitação.
 * **Evaluation (Avaliação)**: Executar `npm test tests/congelacao.spec.ts`: o HP derivado da CO começa em Coloração (após Corte).
 
 ### [CARE-RF010] Processamento técnico (HP)
@@ -223,6 +224,12 @@ Para cada requisito, a implementação deve seguir o padrão:
 * **Action (Ação)**: Criar endpoint GET `/api/casos` com filtros por solicitação, paciente, identificador interno, tipo, etapa e status.
 * **Result (Resultado)**: Lista paginada respeitando o perfil do usuário.
 * **Evaluation (Avaliação)**: Executar `npm test tests/busca.spec.ts`.
+
+### [CARE-RF028] Gestão de usuários e perfis
+* **Context (Contexto)**: Usuário autenticado com perfil de Chefia; AD disponível para consulta.
+* **Action (Ação)**: Criar endpoints `/api/admin/usuarios` (listar, incluir, alterar perfil, inativar/reativar), restritos à Chefia, e a tela em Configurações. A busca no AD (`/api/admin/ad-user-search`) fica disponível à Chefia e à TI.
+* **Result (Resultado)**: Login inexistente ou desativado no AD é recusado (404); duplicidade e alteração sem efeito retornam 409; alterar o próprio acesso retorna 403; outro perfil retorna 403. Alteração e auditoria gravadas na mesma transação; sem rota de exclusão.
+* **Evaluation (Avaliação)**: `uv run pytest tests/test_usuarios.py` e `npm test` (`services/usuarios.spec.ts`).
 
 ## 4. Desenho do Fluxo do Processo
 
@@ -344,4 +351,5 @@ flowchart TD
 
 Itens do feedback ainda sem definição:
 - Lista de **erros possíveis** em Macroscopia → Recepção e Microscopia → Recepção (RF015).
-- Se a **Congelação e o HP** que chega em seguida (duas solicitações separadas no AGHU) formam um único caso ou dois casos vinculados (RF004, RF009).
+
+Itens já definidos com o setor (ver `00-validacao-negocio.md`, seção 6): caso = solicitação; Congelação e HP são dois casos; formato do identificador interno (RF004, RF006, RF009).
