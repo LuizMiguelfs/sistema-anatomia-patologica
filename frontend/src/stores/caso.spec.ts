@@ -19,7 +19,7 @@ describe('stores/caso', () => {
   it('busca casos enviando só os filtros preenchidos e guarda o resultado', async () => {
     mockApi.get.mockResolvedValue({ data: { items: [{ id: 1, identificador_interno: 'HP-0001/26' }], total: 1 } });
     const store = useCasoStore();
-    await store.buscar({ solicitacao: ' 123 ', paciente: '', tipo_exame: 'HP' }, 2, 20);
+    await store.buscar({ solicitacao: ' 123 ', prontuario: '', tipo_exame: 'HP' }, 2, 20);
     expect(mockApi.get).toHaveBeenCalledWith('/api/casos', { params: { pagina: 2, limite: 20, solicitacao: '123', tipo_exame: 'HP' } });
     expect(store.casos[0].identificador_interno).toBe('HP-0001/26');
     expect(store.total).toBe(1);

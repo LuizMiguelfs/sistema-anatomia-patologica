@@ -34,7 +34,7 @@
 | RF024 | Indicadores gerenciais | Exibir turnaround time, taxa de cumprimento de prazos, volume de casos, rejeições, automação do preenchimento e rastreabilidade. | Importante |
 | RF025 | Procedimentos faturáveis | Registrar de forma estruturada os procedimentos definidos como faturáveis (lista do ponto de decisão 8) e permitir sua consulta consolidada. | Importante |
 | RF026 | Substituição na ausência | Permitir delegar temporariamente validação e permissões da Preceptoria ou Chefia a substitutos, com registro da delegação. | Desejável |
-| RF027 | Busca de casos | Localizar casos por número da solicitação, paciente, identificador interno, tipo de exame, etapa ou status. | Importante |
+| RF027 | Busca de casos | Localizar casos por número da solicitação do AGHU (código do exame), prontuário do paciente, identificador interno, tipo de exame, etapa ou status. O nome do paciente fica cifrado e não é critério de busca. | Importante |
 | RF028 | Gestão de usuários e perfis | A Chefia inclui no SAP um login de rede existente no AD (o nome vem do AD), escolhe o perfil, altera o perfil e inativa ou reativa o acesso. Ninguém altera o próprio perfil nem inativa o próprio acesso. Não há exclusão de usuário. Toda alteração é auditada (categoria SEGURANCA). | Essencial |
 
 ### 📌 Legenda de Níveis de Prioridade:
@@ -221,7 +221,7 @@ Para cada requisito, a implementação deve seguir o padrão:
 
 ### [CARE-RF027] Busca de casos
 * **Context (Contexto)**: Casos persistidos.
-* **Action (Ação)**: Criar endpoint GET `/api/casos` com filtros por solicitação, paciente, identificador interno, tipo, etapa e status.
+* **Action (Ação)**: Criar endpoint GET `/api/casos` com filtros por solicitação, prontuário (busca exata por índice HMAC), identificador interno, tipo, etapa e status.
 * **Result (Resultado)**: Lista paginada respeitando o perfil do usuário.
 * **Evaluation (Avaliação)**: Executar `npm test tests/busca.spec.ts`.
 

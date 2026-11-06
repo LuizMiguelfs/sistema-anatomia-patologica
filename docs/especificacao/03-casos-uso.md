@@ -394,7 +394,7 @@ flowchart LR
 ### UC019 - Buscar casos
 * **Ator**: Todos os perfis internos.
 * **Pré-condição**: Usuário autenticado.
-* **Fluxo**: Informar filtros (solicitação, paciente, identificador interno, tipo de exame, etapa, status) → Sistema lista os casos que o perfil pode ver → Abrir o caso desejado.
+* **Fluxo**: Informar filtros (número da solicitação, prontuário do paciente, identificador interno, tipo de exame, etapa, status) → Sistema lista os casos que o perfil pode ver → Abrir o caso desejado.
 * **Alternativos/Exceções**: Nenhum resultado (mensagem informativa).
 * **Pós-condição**: Nenhuma.
 * **Requisitos**: RF027, RF002.

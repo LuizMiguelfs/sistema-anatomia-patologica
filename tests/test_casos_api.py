@@ -89,3 +89,23 @@ def test_fluxo_completo_pela_api(api):
 def test_exige_autenticacao(api):
     client, _ = api
     assert client.get("/api/casos").status_code == 401
+
+
+def test_dados_do_paciente_cifrados_e_busca_por_prontuario(api):
+    client, db = api
+    rec = _h("ana.recepcao", "RECEPCAO")
+    caso = client.post("/api/casos", json={"solicitacao_aghu": "123", "tipo_exame": "HP"}, headers=rec).json()
+    assert caso["paciente_nome"] == "MARIA DA SILVA" and caso["prontuario_aghu"] == "19033448"
+
+    with sqlite3.connect(db) as conn:
+        nome, prontuario, indice, codigo = conn.execute(
+            "SELECT paciente_nome, prontuario_aghu, prontuario_indice, paciente_codigo_aghu FROM casos").fetchone()
+    assert nome.startswith("aes256gcm:v1:") and prontuario.startswith("aes256gcm:v1:")
+    assert "MARIA" not in nome and "19033448" not in prontuario + indice
+    assert codigo == "9"  # chave técnica do AGHU, em claro
+
+    # Prontuário como aparece na Ficha de Trabalho ("1903344/8") ou só com dígitos.
+    for termo in ("1903344/8", "19033448"):
+        pagina = client.get("/api/casos", params={"prontuario": termo}, headers=rec).json()
+        assert pagina["total"] == 1 and pagina["items"][0]["paciente_nome"] == "MARIA DA SILVA"
+    assert client.get("/api/casos", params={"prontuario": "11111111"}, headers=rec).json()["total"] == 0

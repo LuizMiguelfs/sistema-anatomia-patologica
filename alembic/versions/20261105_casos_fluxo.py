@@ -51,8 +51,9 @@ def upgrade() -> None:
             sa.Column("identificador_interno", sa.String(40), nullable=False, unique=True),
             sa.Column("solicitacao_aghu", sa.String(20), nullable=False, unique=True),
             sa.Column("paciente_codigo_aghu", sa.String(20), nullable=False),
-            sa.Column("paciente_nome", sa.String(200), nullable=False),
-            sa.Column("prontuario_aghu", sa.String(20)),
+            sa.Column("paciente_nome", sa.Text, nullable=False),  # cifrado (AES-256)
+            sa.Column("prontuario_aghu", sa.Text),  # cifrado (AES-256)
+            sa.Column("prontuario_indice", sa.String(64)),  # HMAC do prontuário, para busca exata
             sa.Column("tipo_exame", sa.String(3), nullable=False),
             sa.Column("etapa_atual", sa.String(30), nullable=False),
             sa.Column("status", sa.String(30), nullable=False),
@@ -61,7 +62,11 @@ def upgrade() -> None:
             sa.Column("atualizado_em", sa.String(40), nullable=False),
             sa.Column("ativo", sa.Boolean, nullable=False, server_default=sa.true()),  # soft delete
         )
-        op.create_index("ix_casos_paciente_nome", "casos", ["paciente_nome"])
+        op.create_index("ix_casos_prontuario_indice", "casos", ["prontuario_indice"])
+    elif "prontuario_indice" not in {c["name"] for c in sa.inspect(bind).get_columns("casos")}:
+        # Banco criado por uma versão anterior desta migração.
+        op.add_column("casos", sa.Column("prontuario_indice", sa.String(64)))
+        op.create_index("ix_casos_prontuario_indice", "casos", ["prontuario_indice"])
         op.create_index("ix_casos_etapa_status", "casos", ["etapa_atual", "status"])
 
     if "caso_amostras" not in existentes:

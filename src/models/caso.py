@@ -6,18 +6,22 @@ Espelham a migração `20261105_casos_fluxo`. O acesso aos dados é feito por SQ
 desenvolvimento e referência para o Alembic). Sem exclusão física: `ativo` faz o soft delete.
 """
 
-from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import expression
 
 from ..resources.database import Base
 
 
 class Caso(Base):
-    """Caso = uma solicitação do AGHU acompanhada pelo SAP (identificador SIGLA-NNNN/AA)."""
+    """
+    Caso = uma solicitação do AGHU acompanhada pelo SAP (identificador SIGLA-NNNN/AA).
+    Nome e prontuário do paciente ficam cifrados; o código do paciente no AGHU é a chave técnica
+    de vínculo com a fonte e fica em claro, como o código usado nos recursos da auditoria.
+    """
 
     __tablename__ = "casos"
     __table_args__ = (
-        Index("ix_casos_paciente_nome", "paciente_nome"),
+        Index("ix_casos_prontuario_indice", "prontuario_indice"),
         Index("ix_casos_etapa_status", "etapa_atual", "status"),
     )
 
@@ -25,8 +29,9 @@ class Caso(Base):
     identificador_interno = Column(String(40), nullable=False, unique=True)
     solicitacao_aghu = Column(String(20), nullable=False, unique=True)
     paciente_codigo_aghu = Column(String(20), nullable=False)
-    paciente_nome = Column(String(200), nullable=False)
-    prontuario_aghu = Column(String(20))
+    paciente_nome = Column(Text, nullable=False)  # cifrado com AES-256 (SPEC.md)
+    prontuario_aghu = Column(Text)  # cifrado com AES-256 (SPEC.md)
+    prontuario_indice = Column(String(64))  # HMAC-SHA256 do prontuário normalizado, só para busca exata
     tipo_exame = Column(String(3), nullable=False)
     etapa_atual = Column(String(30), nullable=False)
     status = Column(String(30), nullable=False)

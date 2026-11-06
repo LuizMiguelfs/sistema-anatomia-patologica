@@ -19,7 +19,7 @@
     <!-- Filtros (RF027) -->
     <div class="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-white p-4 md:grid-cols-6">
       <input v-model="filtros.solicitacao" class="rounded border p-2 text-sm" placeholder="Nº da solicitação" @keyup.enter="pesquisar" />
-      <input v-model="filtros.paciente" class="rounded border p-2 text-sm md:col-span-2" placeholder="Paciente" @keyup.enter="pesquisar" />
+      <input v-model="filtros.prontuario" class="rounded border p-2 text-sm md:col-span-2" placeholder="Prontuário do paciente" inputmode="numeric" @keyup.enter="pesquisar" />
       <input v-model="filtros.identificador" class="rounded border p-2 text-sm" placeholder="Identificador interno" @keyup.enter="pesquisar" />
       <select v-model="filtros.tipo_exame" class="rounded border p-2 text-sm">
         <option value="">Tipo de exame</option>
@@ -201,7 +201,7 @@ const colunas = [
 ];
 
 // --- Lista ------------------------------------------------------------------
-const filtros = reactive<FiltrosCaso>({ solicitacao: '', paciente: '', identificador: '', tipo_exame: '', etapa: '', status: '' });
+const filtros = reactive<FiltrosCaso>({ solicitacao: '', prontuario: '', identificador: '', tipo_exame: '', etapa: '', status: '' });
 const pagina = ref(1);
 const buscou = ref(false);
 const erroLista = ref('');
@@ -220,7 +220,7 @@ async function carregar() {
 const pesquisar = () => { pagina.value = 1; return carregar(); };
 const irParaPagina = (n: number) => { pagina.value = n; return carregar(); };
 function limparFiltros() {
-  Object.assign(filtros, { solicitacao: '', paciente: '', identificador: '', tipo_exame: '', etapa: '', status: '' });
+  Object.assign(filtros, { solicitacao: '', prontuario: '', identificador: '', tipo_exame: '', etapa: '', status: '' });
   return pesquisar();
 }
 

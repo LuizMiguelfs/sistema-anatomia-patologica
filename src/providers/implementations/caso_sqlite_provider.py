@@ -4,6 +4,9 @@ Executa apenas SQL nativo de ``src/providers/sql/caso/`` e devolve dicionários.
 Não contém regra de negócio e NÃO faz commit nas escritas: a transação é controlada
 pelo Controller (``commit``/``rollback``), para que caso, movimentação e auditoria
 sejam gravados de forma atômica.
+
+Nome e prontuário do paciente são gravados cifrados (AES-256) e decifrados na leitura;
+a busca por prontuário usa o índice HMAC (`prontuario_indice`), nunca o valor em claro.
 """
 import os
 from functools import lru_cache
@@ -12,10 +15,14 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...helpers.crypto_helper import cifrar, decifrar, indice_busca, normalizar_prontuario
 from ...helpers.sql_helper import read_sql_file
 from ..interfaces.caso_provider_interface import CasoProviderInterface
 
 _SQL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sql")
+
+#: Colunas de `casos` que identificam o paciente e ficam cifradas no banco.
+_COLUNAS_CIFRADAS = ("paciente_nome", "prontuario_aghu")
 
 
 @lru_cache(maxsize=None)
@@ -35,10 +42,23 @@ class CasoSqliteProvider(CasoProviderInterface):
         """Recebe a sessão assíncrona do banco local da aplicação."""
         self.session = session
 
+    @staticmethod
+    def _decifrar(linha: Dict[str, Any]) -> Dict[str, Any]:
+        """Decifra as colunas do paciente presentes na linha."""
+        for coluna in _COLUNAS_CIFRADAS:
+            if coluna in linha:
+                linha[coluna] = decifrar(linha[coluna])
+        return linha
+
+    @staticmethod
+    def _indice_prontuario(prontuario: Any) -> Optional[str]:
+        """Índice de busca do prontuário (só dígitos), ou None."""
+        return indice_busca(normalizar_prontuario(str(prontuario))) if prontuario not in (None, "") else None
+
     async def _all(self, sql_file: str, params: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Executa um template e devolve todas as linhas como dicionários."""
+        """Executa um template e devolve todas as linhas como dicionários (dados do paciente decifrados)."""
         result = await self.session.execute(text(get_sql_query(sql_file)), params)
-        return [dict(row) for row in result.mappings().all()]
+        return [self._decifrar(dict(row)) for row in result.mappings().all()]
 
     async def _one(self, sql_file: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Executa um template e devolve a primeira linha, ou None."""
@@ -73,8 +93,14 @@ class CasoSqliteProvider(CasoProviderInterface):
         return int(row["ultimo"])
 
     async def inserir_caso(self, dados: Dict[str, Any]) -> int:
-        """Executa `caso/inserir_caso.sql` e devolve o id do caso."""
-        row = await self._one("caso/inserir_caso.sql", dados)
+        """Executa `caso/inserir_caso.sql` (nome e prontuário cifrados) e devolve o id do caso."""
+        params = {
+            **dados,
+            "paciente_nome": cifrar(dados["paciente_nome"]),
+            "prontuario_aghu": cifrar(dados.get("prontuario_aghu")),
+            "prontuario_indice": self._indice_prontuario(dados.get("prontuario_aghu")),
+        }
+        row = await self._one("caso/inserir_caso.sql", params)
         return int(row["id"])
 
     async def inserir_amostra(self, caso_id: int, amostra_aghu: str, descricao: Optional[str]) -> None:
@@ -103,10 +129,9 @@ class CasoSqliteProvider(CasoProviderInterface):
     @staticmethod
     def _filtros(filtros: Dict[str, Any]) -> Dict[str, Any]:
         """Parâmetros nomeados dos filtros de busca (None = filtro desativado)."""
-        paciente = filtros.get("paciente")
         return {
             "solicitacao": filtros.get("solicitacao"),
-            "paciente": f"%{paciente.lower()}%" if paciente else None,
+            "prontuario": CasoSqliteProvider._indice_prontuario(filtros.get("prontuario")),
             "identificador": filtros.get("identificador"),
             "tipo_exame": filtros.get("tipo_exame"),
             "etapa": filtros.get("etapa"),

@@ -12,7 +12,9 @@ class CasoProviderInterface(ABC):
     Provedores NÃO aplicam regras de negócio e NÃO fazem commit nos métodos de escrita:
     o controller controla a transação (`commit`/`rollback`) para gravar caso, movimentação
     e auditoria juntos. `session` é a sessão usada pela auditoria na mesma transação.
-    Datas são texto ISO 8601 (UTC).
+    Datas são texto ISO 8601 (UTC). Filtros da busca: solicitacao, prontuario (exato),
+    identificador, tipo_exame, etapa e status. Nome e prontuário do paciente entram e saem
+    em claro; a implementação é responsável por gravá-los cifrados (AES-256).
     """
 
     session: AsyncSession

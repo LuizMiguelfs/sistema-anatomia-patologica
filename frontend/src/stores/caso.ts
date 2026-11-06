@@ -40,7 +40,8 @@ export interface SolicitacaoAghu {
 
 export interface FiltrosCaso {
   solicitacao?: string;
-  paciente?: string;
+  /** Prontuário do paciente: busca exata (o nome fica cifrado no banco). */
+  prontuario?: string;
   identificador?: string;
   tipo_exame?: string;
   etapa?: string;

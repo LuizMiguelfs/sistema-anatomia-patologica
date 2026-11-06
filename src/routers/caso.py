@@ -123,8 +123,8 @@ def _ip(request: Request) -> Optional[str]:
 
 @router.get("", response_model=PaginaCasos)
 async def buscar_casos(
-    solicitacao: Optional[str] = None,
-    paciente: Optional[str] = None,
+    solicitacao: Optional[str] = Query(None, description="Número da solicitação no AGHU (código do exame)"),
+    prontuario: Optional[str] = Query(None, max_length=20, description="Prontuário do paciente (busca exata)"),
     identificador: Optional[str] = None,
     tipo_exame: Optional[str] = None,
     etapa: Optional[str] = None,
@@ -135,7 +135,7 @@ async def buscar_casos(
 ) -> Dict[str, Any]:
     """UC019 / RF027: busca paginada com filtros."""
     filtros = {
-        "solicitacao": solicitacao, "paciente": paciente, "identificador": identificador,
+        "solicitacao": solicitacao, "prontuario": prontuario, "identificador": identificador,
         "tipo_exame": tipo_exame, "etapa": etapa, "status": status,
     }
     return await caso_controller.listar_casos(filtros, pagina, limite, provider)
