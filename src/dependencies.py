@@ -56,3 +56,13 @@ def get_usuario_provider(
 ) -> UsuarioProviderInterface:
     """Provedor dos usuários autorizados (banco local da aplicação)."""
     return UsuarioSqliteProvider(session=session)
+
+
+# 5. Painel de indicadores: por enquanto só o provedor demonstrativo.
+from .providers.interfaces.dashboard_provider_interface import DashboardProviderInterface
+from .providers.implementations.dashboard_demo_provider import DashboardDemoProvider
+
+
+def get_dashboard_provider() -> DashboardProviderInterface:
+    """Provedor do painel de indicadores (demonstrativo até haver fonte real)."""
+    return DashboardDemoProvider()

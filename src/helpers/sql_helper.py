@@ -3,7 +3,7 @@
 Use parâmetros vinculados SQLAlchemy (:nome), nunca concatenação de input de usuários.
 """
 from pathlib import Path
-from sqlalchemy import text
+from sqlalchemy import TextClause, text
 
 SQL_ROOT = (Path(__file__).resolve().parents[1] / "providers" / "sql").resolve()
 
@@ -16,7 +16,7 @@ def read_sql_file(file_path: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def load_provider_query(relative_path: str):
+def load_provider_query(relative_path: str) -> TextClause:
     """Carrega uma consulta dentro de providers/sql como SQLAlchemy TextClause."""
     path = (SQL_ROOT / relative_path).resolve()
     if not path.is_relative_to(SQL_ROOT) or path.suffix.lower() != '.sql':

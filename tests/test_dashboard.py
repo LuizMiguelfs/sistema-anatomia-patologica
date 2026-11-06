@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from src.main import app
 from src.models.dashboard import (DashboardResumoResponse,OrigemDados,ResumoOperacional,)
 from src.providers.implementations.dashboard_demo_provider import (DashboardDemoProvider,)
-from src.routers.dashboard import get_dashboard_provider
+from src.dependencies import get_dashboard_provider
 
 #! verifica implementação do provider
 @pytest.mark.asyncio

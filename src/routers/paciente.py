@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
@@ -93,7 +93,7 @@ def _ip(request: Request) -> Optional[str]:
 @router.get("/capacidades", response_model=CapacidadesSaida)
 async def obter_capacidades(
     provider: PacienteProviderInterface = Depends(get_paciente_provider(STRATEGY))
-):
+) -> Dict[str, Any]:
     """Informa a fonte de dados ativa (CSV/POSTGRES) e se ela permite escrita e exclusão."""
     return paciente_controller.obter_capacidades(provider)
 
@@ -104,7 +104,7 @@ async def listar_pacientes(
     limite: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     provider: PacienteProviderInterface = Depends(get_paciente_provider(STRATEGY))
-):
+) -> List[Dict[str, Any]]:
     """Lista pacientes ativos com busca opcional e paginação (`limite`/`offset`)."""
     return await paciente_controller.listar_pacientes(provider, termo=termo, limite=limite, offset=offset)
 
@@ -113,7 +113,7 @@ async def listar_pacientes(
 async def obter_paciente(
     codigo: int,
     provider: PacienteProviderInterface = Depends(get_paciente_provider(STRATEGY))
-):
+) -> Dict[str, Any]:
     """Obtém um paciente pelo código."""
     return await paciente_controller.obter_paciente_por_codigo(codigo, provider)
 
@@ -125,7 +125,7 @@ async def criar_paciente(
     provider: PacienteProviderInterface = Depends(get_paciente_provider(STRATEGY)),
     db: AsyncSession = Depends(get_app_db_session),
     current_user: dict = Depends(auth_handler.decode_token),
-):
+) -> Dict[str, Any]:
     """Cadastra um paciente (registra auditoria NEGOCIO_CLINICO)."""
     return await paciente_controller.criar_paciente(
         payload.model_dump(), provider, db, usuario=_usuario(current_user), ip_origem=_ip(request)
@@ -140,7 +140,7 @@ async def atualizar_paciente(
     provider: PacienteProviderInterface = Depends(get_paciente_provider(STRATEGY)),
     db: AsyncSession = Depends(get_app_db_session),
     current_user: dict = Depends(auth_handler.decode_token),
-):
+) -> Dict[str, Any]:
     """Atualiza um paciente (auditoria com estado anterior e novo)."""
     return await paciente_controller.atualizar_paciente(
         codigo, payload.model_dump(), provider, db, usuario=_usuario(current_user), ip_origem=_ip(request)
@@ -154,7 +154,7 @@ async def excluir_paciente(
     provider: PacienteProviderInterface = Depends(get_paciente_provider(STRATEGY)),
     db: AsyncSession = Depends(get_app_db_session),
     current_user: dict = Depends(auth_handler.decode_token),
-):
+) -> Response:
     """Exclusão lógica do paciente (o registro é preservado; auditoria registrada)."""
     await paciente_controller.excluir_paciente(
         codigo, provider, db, usuario=_usuario(current_user), ip_origem=_ip(request)

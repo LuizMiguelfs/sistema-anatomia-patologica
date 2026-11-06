@@ -1,26 +1,30 @@
-from fastapi import APIRouter, Depends
-from ..auth.auth import auth_handler
-from src.controllers.dashboard_controller import obter_resumo_dashboard
-from src.models.dashboard import DashboardResumoResponse
-from src.providers.implementations.dashboard_demo_provider import (DashboardDemoProvider,)
-from src.providers.interfaces.dashboard_provider_interface import (DashboardProviderInterface,)
+"""
+Painel de indicadores (Membro 5): resumo exibido na tela inicial.
+Protegido por padrão (Default-Private Router Pattern).
+"""
 
-#! endpoints do msm modulo organizados com o msm caminho inicial
+from fastapi import APIRouter, Depends
+
+from ..auth.auth import auth_handler
+from ..controllers.dashboard_controller import obter_resumo_dashboard
+from ..dependencies import get_dashboard_provider
+from ..models.dashboard import DashboardResumoResponse
+from ..providers.interfaces.dashboard_provider_interface import DashboardProviderInterface
+
 router = APIRouter(
     prefix="/api/dashboard",
     tags=["Dashboard"],
-    dependencies=[Depends(auth_handler.decode_token)], #! reutiliza a autenticação JWT
+    dependencies=[Depends(auth_handler.decode_token)],
 )
 
-#! função pra injeção de dependencia (depois vai retornar algo de SQL)
-def get_dashboard_provider() -> DashboardProviderInterface:
-    return DashboardDemoProvider()
 
 @router.get(
     "/resumo",
-    response_model=DashboardResumoResponse, #* FastAPI valida e documenta a resposta 
+    response_model=DashboardResumoResponse,
     summary="Consultar resumo do dashboard",
 )
-
-async def consultar_resumo_dashboard(provider: DashboardProviderInterface = Depends(get_dashboard_provider),) -> DashboardResumoResponse:
+async def consultar_resumo_dashboard(
+    provider: DashboardProviderInterface = Depends(get_dashboard_provider),
+) -> DashboardResumoResponse:
+    """Resumo de indicadores do painel (o provedor atual é demonstrativo)."""
     return await obter_resumo_dashboard(provider)

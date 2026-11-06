@@ -5,6 +5,7 @@ from src.providers.interfaces.dashboard_provider_interface import (DashboardProv
 #! implementar o tal obter_resumo (metodo abstrato da interface) com dados demonstrativos
 class DashboardDemoProvider(DashboardProviderInterface):
     async def obter_resumo(self) -> DashboardResumoResponse:
+        """Resumo demonstrativo do painel (dados fixos, não reais)."""
         return DashboardResumoResponse(
             origem_dados=OrigemDados.DEMONSTRACAO,
             atualizado_em=datetime.now(timezone.utc),

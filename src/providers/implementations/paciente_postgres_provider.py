@@ -64,6 +64,7 @@ class PacientePostgresProvider(PacienteProviderInterface):
             dt_nascimento = None
 
         def texto(campo: str) -> Optional[str]:
+            """Texto do campo sem espaços nas pontas; vazio vira None."""
             valor = row.get(campo)
             if valor is None:
                 return None
@@ -82,7 +83,7 @@ class PacientePostgresProvider(PacienteProviderInterface):
             "cns": None,
         }
 
-    async def _executar(self, arquivo_sql: str, params: Dict[str, Any], escrita: bool = False):
+    async def _executar(self, arquivo_sql: str, params: Dict[str, Any], escrita: bool = False) -> List[Dict[str, Any]]:
         """Executa um template SQL, convertendo falhas de banco em HTTP 503 (sem vazar detalhes)."""
         query = text(get_sql_query(arquivo_sql))
         try:

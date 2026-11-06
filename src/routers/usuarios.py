@@ -4,7 +4,7 @@ Restrita ao perfil CHEFIA. Sem rota de exclusão: o acesso é inativado, nunca a
 """
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
@@ -60,7 +60,7 @@ def _ip(request: Request) -> Optional[str]:
 async def listar_usuarios(
     provider: UsuarioProviderInterface = Depends(get_usuario_provider),
     current_user: dict = Depends(somente_chefia),
-):
+) -> List[Dict[str, Any]]:
     """Lista os usuários autorizados no SAP (ativos e inativos)."""
     return await usuario_controller.listar_usuarios(provider)
 
@@ -71,7 +71,7 @@ async def incluir_usuario(
     request: Request,
     provider: UsuarioProviderInterface = Depends(get_usuario_provider),
     current_user: dict = Depends(somente_chefia),
-):
+) -> Dict[str, Any]:
     """Autoriza um login do AD no SAP com o perfil escolhido."""
     return await usuario_controller.incluir_usuario(
         provider, auth_handler.search_ad_user, current_user["username"], dados.username, dados.perfil, _ip(request)
@@ -85,7 +85,7 @@ async def alterar_perfil(
     request: Request,
     provider: UsuarioProviderInterface = Depends(get_usuario_provider),
     current_user: dict = Depends(somente_chefia),
-):
+) -> Dict[str, Any]:
     """Troca o perfil de um usuário (não vale para o próprio)."""
     return await usuario_controller.alterar_perfil(
         provider, auth_handler.search_ad_user, current_user["username"], username, dados.perfil, _ip(request)
@@ -99,7 +99,7 @@ async def alterar_situacao(
     request: Request,
     provider: UsuarioProviderInterface = Depends(get_usuario_provider),
     current_user: dict = Depends(somente_chefia),
-):
+) -> Dict[str, Any]:
     """Inativa ou reativa o acesso (não vale para o próprio)."""
     return await usuario_controller.alterar_situacao(
         provider, current_user["username"], username, dados.ativo, _ip(request)
