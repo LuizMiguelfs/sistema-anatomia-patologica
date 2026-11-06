@@ -25,6 +25,7 @@
 
 ### Registro e identificação
 - **Solicitação:** pedido de exame registrado no AGHU, com número próprio. **Cada solicitação gera um caso no SAP.**
+- **Número da solicitação / código do exame:** número da solicitação no AGHU (coluna "AGHU" da planilha interna). Com o prontuário, é a forma usual de localizar um caso.
 - **Caso:** acompanhamento de uma solicitação no SAP, do recebimento ao arquivo, com todas as amostras, materiais derivados e movimentações.
 - **Amostra:** material enviado ao setor e vinculado à solicitação no AGHU (uma solicitação pode ter várias amostras).
 - **Identificador interno:** número do caso no setor, no formato `SIGLA-NNNN/AA` (ex.: `HP-0001/26`). Sigla do exame (HP, CO, IHQ, CG, CCV), número de quatro dígitos contado separadamente para cada sigla e reiniciado a cada ano, e os dois últimos dígitos do ano. Vai na etiqueta de cada peça.

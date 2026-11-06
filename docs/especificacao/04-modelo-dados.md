@@ -69,7 +69,7 @@ Formato do registro como entra no helper `registrar_auditoria` e como sai da API
 ```
 
 ### [SCHEMA] Esquema JSON - Paciente
-> **Pendente:** o módulo de pacientes (PR #1) aceita CPF opcional e com máscara, o que diverge deste esquema (CPF obrigatório, 11 dígitos). A view do AGHU (`vw_solicitacao`) não traz CPF nem CNS, e sim o prontuário. Decisão em aberto com o setor.
+> **Pendente:** o módulo de pacientes (PR #1) aceita CPF opcional e com máscara, o que diverge deste esquema (CPF obrigatório, 11 dígitos). A view do AGHU (`vw_solicitacao`) não traz CPF nem CNS, e sim o prontuário. Segundo o setor, o caso é acessado pelo número da solicitação do AGHU (o "código do exame", coluna "AGHU" da planilha) ou pelo prontuário do paciente. A obrigatoriedade do CPF segue em aberto.
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
