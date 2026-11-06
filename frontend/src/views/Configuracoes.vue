@@ -147,6 +147,20 @@
       </div>
     </Card>
 
+    <!-- Trilha de auditoria (TI e Chefia). O backend faz a checagem de permissão. -->
+    <Card v-if="podeVerAuditoria">
+      <template #header>
+        <div class="flex items-center space-x-3">
+          <ClipboardDocumentListIcon class="h-6 w-6 text-paper-text" />
+          <div>
+            <h2 class="text-lg font-bold text-paper-text">Trilha de auditoria</h2>
+            <p class="text-xs text-gray-500">Registro imutável de quem fez o quê, quando e de onde. Somente leitura.</p>
+          </div>
+        </div>
+      </template>
+      <TrilhaAuditoria />
+    </Card>
+
     <!-- Modal 1: Incluir Novo Usuário AD -->
     <Modal :show="showAddUserModal" @close="closeAddModal">
       <template #header>Incluir Usuário no Sistema</template>
@@ -258,14 +272,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import Card from '../components/Card.vue';
 import Modal from '../components/Modal.vue';
 import Button from '../components/Button.vue';
+import TrilhaAuditoria from '../components/TrilhaAuditoria.vue';
 import { useAuthStore } from '../stores/auth';
 import api from '../services/api';
-import { 
-  Cog6ToothIcon, 
+import {
+  ClipboardDocumentListIcon,
+  Cog6ToothIcon,
   UserCircleIcon, 
   ShieldCheckIcon, 
   UserGroupIcon, 
@@ -277,6 +293,11 @@ import {
 } from '@heroicons/vue/24/outline';
 
 const authStore = useAuthStore();
+
+// TI (grupo do AD) ou Chefia (perfil local, disponível com o módulo de autenticação).
+const podeVerAuditoria = computed(
+  () => authStore.isAdmin || (authStore.user as { role?: string } | null)?.role === 'CHEFIA',
+);
 const showAddUserModal = ref(false);
 const showEditUserModal = ref(false);
 

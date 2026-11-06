@@ -31,3 +31,16 @@ def get_paciente_provider(strategy: str) -> Callable[..., PacienteProviderInterf
         return _get_paciente_csv_provider
     else:
         raise ValueError(f"Estratégia de provedor desconhecida: {strategy}")
+
+
+# 3. Auditoria: leitura da trilha `audit_logs` no banco local da aplicação (app.db).
+from .providers.interfaces.auditoria_provider_interface import AuditoriaProviderInterface
+from .providers.implementations.auditoria_sqlite_provider import AuditoriaSqliteProvider
+from .resources.database import get_app_db_session
+
+
+def get_auditoria_provider(
+    session: AsyncSession = Depends(get_app_db_session)
+) -> AuditoriaProviderInterface:
+    """Provedor de leitura da trilha de auditoria (banco local da aplicação)."""
+    return AuditoriaSqliteProvider(session=session)

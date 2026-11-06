@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .resources.database import DatabaseManager, Base
+# Importa o modelo de auditoria para registrá-lo no metadata (create_all) e a proteção de imutabilidade.
+from .models.audit_log import instalar_protecao_auditoria
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,6 +35,8 @@ async def lifespan(app: FastAPI):
     # Create tables for App DB (if they don't exist) - for development only, Alembic handles this in production
     async with app.state.app_db.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Triggers que impedem UPDATE/DELETE em audit_logs (idempotente; vale para bancos já existentes).
+        await conn.run_sync(instalar_protecao_auditoria)
     print("App SQLite tables checked/created.")
 
     yield
