@@ -22,7 +22,8 @@ const router = createRouter({
 router.beforeEach(async to => {
   const auth = useAuthStore();
   await auth.initializeAuth();
-  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+  // Default-Private: toda rota exige login, exceto as marcadas com meta.public.
+  if (!to.meta.public && !auth.isAuthenticated) {
     return { name: 'Login', query: { redirect: to.fullPath } };
   }
   if (to.meta.public && auth.isAuthenticated) return { name: 'Início' };
