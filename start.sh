@@ -13,7 +13,7 @@ echo -e "${BLUE}==================================================${NC}"
 
 # 0. Limpeza de processos anteriores
 echo -e "${YELLOW}🧹 Limpando processos anteriores...${NC}"
-pkill -f "uvicorn src.main:app" || true
+echo "Processos existentes não serão finalizados automaticamente."
 
 # 1. Verificação das ferramentas necessárias
 echo -e "\n${YELLOW}[1/6] Verificando ferramentas do sistema...${NC}"
@@ -47,7 +47,7 @@ fi
 echo -e "\n${YELLOW}[4/6] Verificando dependências do frontend...${NC}"
 if [ -d "frontend" ]; then
     cd frontend
-    if npm install; then
+    if npm ci; then
         echo -e "  ✅ Dependências do frontend instaladas."
     else
         echo -e "${RED}❌ Erro ao instalar dependências do frontend.${NC}"
