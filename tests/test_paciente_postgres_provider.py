@@ -95,22 +95,14 @@ async def test_escrita_bloqueada_por_padrao_nao_altera_o_banco(sessao):
     assert total == 3
 
 
-async def test_escrita_habilitada_insere_e_atualiza(sessao):
+async def test_escrita_habilitada_legada_e_ignorada(sessao):
     provider = PacientePostgresProvider(sessao, escrita_habilitada=True)
-    criado = await provider.criar_paciente(
-        {"nome": "NOVO PACIENTE", "dt_nascimento": date(2001, 2, 3), "sexo": "F", "cor": None,
-         "nome_mae": "MAE N", "nome_pai": None, "cpf": "529.982.247-25"}
-    )
-    assert criado["codigo"] == 503 and criado["dt_nascimento"] == date(2001, 2, 3)
-
-    atualizado = await provider.atualizar_paciente(
-        503, {"nome": "NOVO EDITADO", "dt_nascimento": date(2001, 2, 4), "sexo": "F"}
-    )
-    assert atualizado["nome"] == "NOVO EDITADO" and atualizado["nome_mae"] is None
-    assert await provider.atualizar_paciente(999, {"nome": "X", "dt_nascimento": date(2000, 1, 1)}) is None
-    # Exclusão continua proibida mesmo com escrita habilitada (sem soft delete no AGHU)
+    assert provider.capacidades() == {"escrita": False, "exclusao": False}
     with pytest.raises(PermissionError):
-        await provider.excluir_paciente(503)
+        await provider.criar_paciente({"nome": "INDEVIDO"})
+    with pytest.raises(PermissionError):
+        await provider.atualizar_paciente(500, {"nome": "INDEVIDO"})
+    assert (await sessao.execute(text("SELECT COUNT(*) FROM agh.aip_pacientes"))).scalar() == 3
 
 
 async def test_falha_de_banco_vira_503_sem_vazar_detalhes():
