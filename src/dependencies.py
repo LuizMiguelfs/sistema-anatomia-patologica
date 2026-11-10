@@ -13,7 +13,7 @@ def _get_paciente_postgres_provider(
     session: AsyncSession = Depends(get_aghu_db_session)
 ) -> PacienteProviderInterface:
     """Provedor AGHU (Postgres). Escrita só com PACIENTE_POSTGRES_ESCRITA=true (RNF005)."""
-    return PacientePostgresProvider(session=session, escrita_habilitada=settings.PACIENTE_POSTGRES_ESCRITA)
+    return PacientePostgresProvider(session=session, escrita_habilitada=False)
 
 def _get_paciente_csv_provider() -> PacienteProviderInterface:
     """Provedor CSV para desenvolvimento offline (caminho em PACIENTE_CSV_PATH)."""
@@ -58,14 +58,16 @@ def get_usuario_provider(
     return UsuarioSqliteProvider(session=session)
 
 
-# 5. Painel de indicadores: por enquanto só o provedor demonstrativo.
+# 5. Painel de indicadores: banco local (dados reais, sem inferência de eventos não capturados).
 from .providers.interfaces.dashboard_provider_interface import DashboardProviderInterface
-from .providers.implementations.dashboard_demo_provider import DashboardDemoProvider
+from .providers.implementations.dashboard_sqlite_provider import DashboardSqliteProvider
 
 
-def get_dashboard_provider() -> DashboardProviderInterface:
-    """Provedor do painel de indicadores (demonstrativo até haver fonte real)."""
-    return DashboardDemoProvider()
+def get_dashboard_provider(
+    session: AsyncSession = Depends(get_app_db_session),
+) -> DashboardProviderInterface:
+    """Consulta indicadores reais; prazos só se parametrizados e homologados."""
+    return DashboardSqliteProvider(session, prazos=settings.prazos_exame_horas())
 
 
 # 6. Casos (Membro 4): casos no banco local e leitura de solicitações no AGHU.
