@@ -87,15 +87,14 @@
       <div class="space-y-4">
         <div class="flex gap-2">
           <input v-model="novo.solicitacao" class="flex-1 rounded border p-2 text-sm" inputmode="numeric" placeholder="Nº da solicitação no AGHU" @keyup.enter="consultarAghu" />
-          <select v-model="novo.tipo" class="rounded border p-2 text-sm">
-            <option v-for="t in TIPOS_EXAME" :key="t" :value="t">{{ t }}</option>
-          </select>
           <Button variant="secondary" :loading="novo.consultando" @click="consultarAghu">Consultar AGHU</Button>
         </div>
 
         <div v-if="novo.dados" class="space-y-2 rounded border border-gray-200 bg-gray-50 p-3 text-sm">
           <p class="text-xs uppercase text-gray-500">Dados do AGHU (somente leitura)</p>
           <p><strong>Paciente:</strong> {{ novo.dados.paciente_nome }}</p>
+          <p><strong>Exame informado pelo AGHU:</strong> {{ novo.dados.tipo_exame || 'Não mapeado' }} (somente leitura)</p>
+          <p v-if="!novo.dados.tipo_exame || !TIPOS_EXAME.includes(novo.dados.tipo_exame)" class="text-red-700">Abertura bloqueada: a TI deve validar o mapeamento do tipo de exame no AGHU.</p>
           <p v-if="novo.dados.prontuario_aghu"><strong>Prontuário:</strong> {{ novo.dados.prontuario_aghu }}</p>
           <p><strong>Amostras:</strong> {{ novo.dados.amostras.map(a => a.descricao || `#${a.amostra_aghu}`).join(', ') || '—' }}</p>
           <p v-if="novo.dados.caso_existente" class="text-amber-700">Já existe o caso {{ novo.dados.caso_existente }} para esta solicitação.</p>
@@ -105,7 +104,7 @@
       </div>
       <template #footer>
         <Button variant="secondary" @click="modalNovo = false">Cancelar</Button>
-        <Button variant="primary" :loading="novo.salvando" :disabled="!novo.dados || !!novo.dados.caso_existente" @click="confirmarAbertura">
+        <Button variant="primary" :loading="novo.salvando" :disabled="!novo.dados || !!novo.dados.caso_existente || !novo.dados.tipo_exame || !TIPOS_EXAME.includes(novo.dados.tipo_exame)" @click="confirmarAbertura">
           Confirmar e abrir caso
         </Button>
       </template>
@@ -122,6 +121,25 @@
           <p><strong>Etapa atual:</strong> {{ rotuloEtapa(caso.etapa_atual) }}</p>
         </div>
         <p><strong>Amostras:</strong> {{ caso.amostras.map(a => a.descricao || `#${a.amostra_aghu}`).join(', ') }}</p>
+        <div class="space-y-2 rounded-lg border p-3">
+          <h3 class="font-semibold">Conferência cadastral no AGHU</h3>
+          <p class="text-xs text-gray-600">O SAP guarda uma cópia local; o AGHU continua sendo a origem oficial.</p>
+          <p class="text-xs text-gray-500">Última sincronização: {{ caso.ultima_sincronizacao_aghu ? formatarData(caso.ultima_sincronizacao_aghu) : 'Não informada' }}</p>
+          <Button v-if="podeAbrir" variant="secondary" :loading="conferindo" @click="conferirCadastro">Conferir com AGHU</Button>
+          <p v-if="erroConferencia" class="text-sm text-red-700" role="alert">{{ erroConferencia }}</p>
+          <div v-if="conferencia" class="space-y-2">
+            <p v-if="!conferencia.atualizacao_pendente" class="text-green-700">Nenhuma diferença cadastral encontrada.</p>
+            <template v-else>
+              <p class="font-semibold text-amber-700">Alterações encontradas:</p>
+              <p v-for="(d, campo) in conferencia.divergencias" :key="campo">
+                <strong>{{ campo === 'paciente_nome' ? 'Nome' : 'Prontuário' }}:</strong>
+                {{ d.anterior || '—' }} → {{ d.atual_aghu || '—' }}
+              </p>
+              <Button v-if="conferencia.pode_sincronizar" variant="primary" :loading="processando" @click="sincronizarCadastro">Sincronizar cópia local</Button>
+              <p v-else class="text-amber-700">Apenas a Recepção pode sincronizar casos não arquivados.</p>
+            </template>
+          </div>
+        </div>
 
         <p v-if="erroCaso" class="rounded bg-red-50 p-2 text-red-700" role="alert">{{ erroCaso }}</p>
 
@@ -172,7 +190,7 @@ import Button from '../components/Button.vue';
 import Modal from '../components/Modal.vue';
 import {
   mensagemErro, useCasoStore,
-  type CasoDetalhe, type FiltrosCaso, type Movimentacao, type SolicitacaoAghu,
+  type CasoDetalhe, type ConferenciaAghu, type FiltrosCaso, type Movimentacao, type SolicitacaoAghu,
 } from '../stores/caso';
 import { useAuthStore } from '../stores/auth';
 
@@ -229,13 +247,13 @@ function limparFiltros() {
 // --- Abrir caso (UC002) -----------------------------------------------------
 const modalNovo = ref(false);
 const novo = reactive({
-  solicitacao: '', tipo: 'HP', consultando: false, salvando: false, erro: '',
+  solicitacao: '', consultando: false, salvando: false, erro: '',
   dados: null as SolicitacaoAghu | null,
 });
 
 /** Abre o modal de abertura de caso com o formulário limpo. */
 function abrirModalNovo() {
-  Object.assign(novo, { solicitacao: '', tipo: 'HP', consultando: false, salvando: false, erro: '', dados: null });
+  Object.assign(novo, { solicitacao: '', consultando: false, salvando: false, erro: '', dados: null });
   modalNovo.value = true;
 }
 /** Pré-visualiza a solicitação no AGHU (paciente e amostras) antes de abrir o caso. */
@@ -256,7 +274,7 @@ async function consultarAghu() {
 async function confirmarAbertura() {
   novo.erro = ''; novo.salvando = true;
   try {
-    const criado = await store.abrir(novo.solicitacao.trim(), novo.tipo);
+    const criado = await store.abrir(String(novo.dados!.solicitacao_aghu));
     modalNovo.value = false;
     await pesquisar();
     await abrirModalCaso(criado.id);
@@ -273,6 +291,9 @@ const caso = ref<CasoDetalhe | null>(null);
 const historico = ref<Movimentacao[]>([]);
 const erroCaso = ref('');
 const processando = ref(false);
+const conferencia = ref<ConferenciaAghu | null>(null);
+const erroConferencia = ref('');
+const conferindo = ref(false);
 const modo = ref<'detalhe' | 'encaminhar' | 'retornar'>('detalhe');
 const acao = reactive({ destino: '', motivo: '' });
 
@@ -282,7 +303,8 @@ async function recarregarCaso(id: number) {
 }
 /** Abre o modal do caso com detalhe, ações permitidas e histórico. */
 async function abrirModalCaso(id: number) {
-  erroCaso.value = ''; modo.value = 'detalhe'; caso.value = null; historico.value = [];
+  erroCaso.value = ''; erroConferencia.value = ''; conferencia.value = null;
+  modo.value = 'detalhe'; caso.value = null; historico.value = [];
   modalCaso.value = true;
   try {
     await recarregarCaso(id);
@@ -290,6 +312,38 @@ async function abrirModalCaso(id: number) {
     erroCaso.value = mensagemErro(e);
   }
 }
+/** Consulta o AGHU e compara somente dados cadastrais do caso local. */
+async function conferirCadastro() {
+  if (!caso.value) return;
+  erroConferencia.value = '';
+  conferindo.value = true;
+  try {
+    conferencia.value = await store.conferirAghu(caso.value.id);
+  } catch (e) {
+    conferencia.value = null;
+    erroConferencia.value = mensagemErro(e, 'Não foi possível consultar o AGHU.');
+  } finally {
+    conferindo.value = false;
+  }
+}
+
+/** Refaz a leitura da origem no servidor e audita qualquer mudança aplicada. */
+async function sincronizarCadastro() {
+  if (!caso.value) return;
+  erroConferencia.value = '';
+  processando.value = true;
+  try {
+    const id = caso.value.id;
+    await store.sincronizarAghu(id);
+    await Promise.all([recarregarCaso(id), carregar()]);
+    await conferirCadastro();
+  } catch (e) {
+    erroConferencia.value = mensagemErro(e);
+  } finally {
+    processando.value = false;
+  }
+}
+
 /** Troca o modal para o formulário de encaminhar ou retornar (motivo obrigatório). */
 function iniciarAcao(tipo: 'encaminhar' | 'retornar') {
   acao.destino = ''; acao.motivo = ''; erroCaso.value = ''; modo.value = tipo;
@@ -332,6 +386,7 @@ function rotuloMovimento(m: Movimentacao): string {
     case 'CONCLUSAO': return `${origem} concluída → ${destino}`;
     case 'ENCAMINHAMENTO': return `Encaminhado: ${origem} → ${destino}`;
     case 'RETORNO': return `Retornado: ${origem} → ${destino}`;
+    case 'SINCRONIZACAO_AGHU': return 'Dados cadastrais atualizados a partir do AGHU';
     default: return m.tipo;
   }
 }

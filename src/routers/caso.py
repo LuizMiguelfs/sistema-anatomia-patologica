@@ -6,7 +6,7 @@ e delega ao Controller. Protegido por padrão (Default-Private Router Pattern).
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from ..auth.auth import auth_handler
 from ..controllers import caso_controller
@@ -26,9 +26,9 @@ NumeroAghu = Union[int, str]
 
 # --- Entrada ------------------------------------------------------------------
 class AbrirCasoIn(BaseModel):
-    """Corpo de POST /api/casos."""
+    """Somente vínculo AGHU; cliente não pode declarar nem sobrescrever tipo de exame."""
+    model_config = ConfigDict(extra="forbid")
     solicitacao_aghu: str = Field(..., min_length=1, max_length=20)
-    tipo_exame: str = Field(..., min_length=2, max_length=3, description="HP, CO, CG ou CCV")
 
 
 class EncaminharIn(BaseModel):
@@ -83,6 +83,7 @@ class CasoDetalhe(CasoResumo):
     """Caso aberto, com amostras e ações permitidas."""
     paciente_codigo_aghu: NumeroAghu
     prontuario_aghu: Optional[NumeroAghu] = None
+    ultima_sincronizacao_aghu: Optional[str] = None
     criado_por: str
     amostras: List[AmostraCaso]
     acoes: AcoesCaso
@@ -100,6 +101,7 @@ class SolicitacaoAghu(BaseModel):
     paciente_codigo_aghu: NumeroAghu
     paciente_nome: str
     prontuario_aghu: Optional[NumeroAghu] = None
+    tipo_exame: Optional[str] = None
     amostras: List[AmostraAghu]
     caso_existente: Optional[str] = None
 
@@ -151,7 +153,7 @@ async def abrir_caso(
 ) -> Dict[str, Any]:
     """UC002 / RF004: cria o caso a partir da solicitação do AGHU."""
     return await caso_controller.abrir_caso(
-        dados.solicitacao_aghu, dados.tipo_exame, usuario, _ip(request), provider, aghu
+        dados.solicitacao_aghu, usuario, _ip(request), provider, aghu
     )
 
 
@@ -164,6 +166,38 @@ async def consultar_solicitacao(
 ) -> Dict[str, Any]:
     """RF003: pré-visualiza paciente/amostras do AGHU (somente leitura)."""
     return await caso_controller.consultar_solicitacao_aghu(solicitacao, provider, aghu)
+
+
+class ConferenciaAghu(BaseModel):
+    """Diferenças entre os dados cifrados no caso e o cadastro oficial."""
+    caso_id: int
+    atualizacao_pendente: bool
+    divergencias: Dict[str, Dict[str, Optional[str]]]
+    ultima_sincronizacao_aghu: Optional[str] = None
+    pode_sincronizar: bool
+
+
+@router.get("/{caso_id}/conferencia-aghu", response_model=ConferenciaAghu)
+async def conferencia_aghu(
+    caso_id: int,
+    usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
+    provider: CasoProviderInterface = Depends(get_caso_provider),
+    aghu: AghuSolicitacaoProviderInterface = Depends(get_aghu_solicitacao_provider),
+) -> Dict[str, Any]:
+    """Compara a cópia cadastral local com o AGHU (somente leitura)."""
+    return await caso_controller.conferir_dados_aghu(caso_id, usuario, provider, aghu)
+
+
+@router.post("/{caso_id}/sincronizar-aghu", response_model=CasoDetalhe)
+async def sincronizar_aghu(
+    caso_id: int,
+    request: Request,
+    usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
+    provider: CasoProviderInterface = Depends(get_caso_provider),
+    aghu: AghuSolicitacaoProviderInterface = Depends(get_aghu_solicitacao_provider),
+) -> Dict[str, Any]:
+    """Sincroniza somente nome/prontuário no banco SAP, com histórico e auditoria."""
+    return await caso_controller.sincronizar_dados_aghu(caso_id, usuario, _ip(request), provider, aghu)
 
 
 @router.get("/{caso_id}", response_model=CasoDetalhe)

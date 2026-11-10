@@ -150,6 +150,17 @@ async def _gravar(
 # --------------------------------------------------------------------------- #
 # UC002 - Abrir caso a partir do AGHU                                          #
 # --------------------------------------------------------------------------- #
+def _tipo_aghu(cabecalho: Dict[str, Any]) -> str:
+    """Tipo do exame deve vir da origem oficial e estar mapeado para o fluxo SAP."""
+    tipo = str(cabecalho.get("tipo_exame") or "").strip().upper()
+    if tipo not in TIPOS_EXAME:
+        raise HTTPException(
+            status_code=409,
+            detail="Tipo de exame ausente ou não mapeado no AGHU. Solicite validação do mapeamento à TI.",
+        )
+    return tipo
+
+
 def _validar_solicitacao(solicitacao: str) -> str:
     """Número da solicitação só com dígitos; 422 caso contrário."""
     numero = (solicitacao or "").strip()
@@ -179,7 +190,6 @@ async def consultar_solicitacao_aghu(
 
 async def abrir_caso(
     solicitacao: str,
-    tipo_exame: str,
     usuario: Dict[str, Any],
     ip: Optional[str],
     provider: CasoProviderInterface,
@@ -188,10 +198,6 @@ async def abrir_caso(
     """UC002: cria o caso (um por solicitação) com identificador interno, amostras, movimentação e auditoria."""
     _exigir_perfil(usuario, {PERFIL_RECEPCAO}, "abrir casos")
     numero = _validar_solicitacao(solicitacao)
-    tipo = (tipo_exame or "").strip().upper()
-    if tipo not in TIPOS_EXAME:
-        raise HTTPException(status_code=422, detail=f"Tipo de exame inválido. Use: {', '.join(sorted(TIPOS_EXAME))}.")
-
     if await provider.buscar_por_solicitacao(numero):
         raise HTTPException(status_code=409, detail="Já existe um caso aberto para esta solicitação.")
 
@@ -206,6 +212,9 @@ async def abrir_caso(
     if not amostras:
         raise HTTPException(status_code=422, detail="A solicitação não possui amostra vinculada.")
 
+    # Nunca aceitar tipo do cliente. Até a validação do mapeamento SQL pelo DBA,
+    # bloquear abertura sem tipo do AGHU (fail closed, RNF005).
+    tipo = _tipo_aghu(cabecalho)
     etapa_inicial = await provider.etapa_inicial(tipo)
     if not etapa_inicial:
         raise HTTPException(status_code=409, detail=f"Fluxo do exame {tipo} não está configurado.")
@@ -433,3 +442,92 @@ async def historico_caso(caso_id: int, provider: CasoProviderInterface) -> List[
     """UC018: movimentações do caso em ordem cronológica."""
     await _caso_ou_404(provider, caso_id)
     return await provider.listar_movimentacoes(caso_id)
+
+# --------------------------------------------------------------------------- #
+# Conciliação cadastral do AGHU (consulta + sincronização explícita)           #
+# --------------------------------------------------------------------------- #
+async def _comparar_com_aghu(
+    caso: Dict[str, Any], aghu: AghuSolicitacaoProviderInterface
+) -> Dict[str, Any]:
+    """Consulta a origem; mudanças de vínculo ou tipo exigem análise humana, não merge."""
+    try:
+        origem = await aghu.buscar_solicitacao(str(caso["solicitacao_aghu"]))
+    except Exception as erro:
+        logger.error("Falha ao conferir cadastro no AGHU: %s", erro.__class__.__name__)
+        raise HTTPException(status_code=503, detail="AGHU indisponível. O cadastro local foi preservado.")
+    if not origem:
+        raise HTTPException(status_code=409, detail="Solicitação não localizada no AGHU; acione a TI.")
+    if str(origem.get("paciente_codigo_aghu")) != str(caso["paciente_codigo_aghu"]):
+        raise HTTPException(status_code=409, detail="Vínculo de paciente divergente no AGHU. Não é possível sincronizar automaticamente.")
+    if _tipo_aghu(origem) != caso["tipo_exame"]:
+        raise HTTPException(status_code=409, detail="Tipo de exame divergente no AGHU. Encaminhe para revisão da gestão.")
+
+    atual = {
+        "paciente_nome": str(origem.get("paciente_nome") or "").strip(),
+        "prontuario_aghu": str(origem.get("prontuario_aghu") or "").strip() or None,
+    }
+    if not atual["paciente_nome"]:
+        raise HTTPException(status_code=409, detail="Cadastro incompleto no AGHU: nome não informado.")
+
+    anterior = {
+        "paciente_nome": str(caso["paciente_nome"]).strip(),
+        "prontuario_aghu": str(caso.get("prontuario_aghu") or "").strip() or None,
+    }
+    divergencias = {
+        chave: {"anterior": anterior[chave], "atual_aghu": valor}
+        for chave, valor in atual.items() if anterior[chave] != valor
+    }
+    return {"divergencias": divergencias, "dados_aghu": atual}
+
+
+async def conferir_dados_aghu(
+    caso_id: int, usuario: Dict[str, Any], provider: CasoProviderInterface,
+    aghu: AghuSolicitacaoProviderInterface,
+) -> Dict[str, Any]:
+    """Compara o snapshot cifrado do caso com a fonte; não altera registros."""
+    _exigir_perfil(usuario, {PERFIL_RECEPCAO}, "conferir dados cadastrais")
+    caso = await _caso_ou_404(provider, caso_id)
+    resultado = await _comparar_com_aghu(caso, aghu)
+    return {
+        "caso_id": caso_id, "atualizacao_pendente": bool(resultado["divergencias"]),
+        "divergencias": resultado["divergencias"],
+        "ultima_sincronizacao_aghu": caso.get("ultima_sincronizacao_aghu"),
+        "pode_sincronizar": _perfil(usuario) == PERFIL_RECEPCAO and caso["status"] != STATUS_ARQUIVADO,
+    }
+
+
+async def sincronizar_dados_aghu(
+    caso_id: int, usuario: Dict[str, Any], ip: Optional[str],
+    provider: CasoProviderInterface, aghu: AghuSolicitacaoProviderInterface,
+) -> Dict[str, Any]:
+    """Refaz comparação no POST (evita confiar no preview), atualiza snapshot e audita."""
+    _exigir_perfil(usuario, {PERFIL_RECEPCAO}, "sincronizar dados cadastrais")
+    caso = await _caso_ou_404(provider, caso_id)
+    if caso["status"] == STATUS_ARQUIVADO:
+        raise HTTPException(status_code=409, detail="Caso arquivado: preserve o snapshot e encaminhe a correção à gestão.")
+    resultado = await _comparar_com_aghu(caso, aghu)
+    if not resultado["divergencias"]:
+        return await obter_caso(caso_id, usuario, provider)
+    agora = _agora()
+    novos = resultado["dados_aghu"]
+    anteriores = {chave: caso.get(chave) for chave in novos}
+    try:
+        await provider.atualizar_dados_aghu(
+            caso_id, novos["paciente_nome"], novos["prontuario_aghu"], agora,
+        )
+        await provider.inserir_movimentacao({
+            "caso_id": caso_id, "tipo": "SINCRONIZACAO_AGHU",
+            "etapa_origem": caso["etapa_atual"], "etapa_destino": caso["etapa_atual"],
+            "motivo": "Atualização cadastral validada no AGHU (snapshot local)",
+            "usuario": _login(usuario), "agora": agora,
+        })
+        await _gravar(
+            provider, usuario=usuario, ip=ip, acao="SINCRONIZAR_CADASTRO_AGHU",
+            caso_id=caso_id, anteriores=anteriores, novos=novos,
+        )
+        await provider.commit()
+    except Exception as erro:
+        await provider.rollback()
+        logger.error("Falha em SINCRONIZAR_CADASTRO_AGHU: %s", erro.__class__.__name__)
+        raise
+    return await obter_caso(caso_id, usuario, provider)
