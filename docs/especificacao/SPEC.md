@@ -88,3 +88,9 @@ uv run alembic heads
 ```
 
 **Observação:** aprovação de um linter estrutural não equivale a homologação operacional, clínica ou de segurança.
+
+
+> **Adendo operacional (2026-11-10):** consultar
+> [`docs/REFINO_POS_AVALIACAO.md`](../REFINO_POS_AVALIACAO.md) antes de
+> implementar o fluxo de pacientes, tipo de exame, conciliação ou dashboard;
+> a integração e os SLAs ainda precisam ser homologados.

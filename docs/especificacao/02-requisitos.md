@@ -353,3 +353,13 @@ Itens do feedback ainda sem definição:
 - Lista de **erros possíveis** em Macroscopia → Recepção e Microscopia → Recepção (RF015).
 
 Itens já definidos com o setor (ver `00-validacao-negocio.md`, seção 6): caso = solicitação; Congelação e HP são dois casos; formato do identificador interno (RF004, RF006, RF009).
+
+
+## Adendo 2026-11-10 — avaliação de produto
+
+As decisões de [`REFINO_POS_AVALIACAO.md`](../REFINO_POS_AVALIACAO.md) prevalecem sobre qualquer
+exemplo legado de cadastro direto de paciente, escolha de tipo de exame ou preenchimento
+manual de dados de origem AGHU. A API de pacientes é consulta somente leitura;
+o exame é resolvido pelo AGHU e o dashboard distingue valores ausentes de zero.
+Requisitos futuros sobre prazos oficiais, sincronização automática e liberação do laudo
+**não** devem ser considerados implementados apenas por constarem desta especificação.
