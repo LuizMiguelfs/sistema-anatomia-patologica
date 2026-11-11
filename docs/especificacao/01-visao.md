@@ -2,12 +2,14 @@
 
 ## 1. Problema e Oportunidade
 * **O Problema:**
-  Preenchimento massivo de informações de entrada manual, feitas em planilhas, com alta probabilidade de erros. Ademais, há dificuldade de acesso e descentralização das informações encontradas no AGHU.
+  O AGHU registra a chegada da solicitação e a liberação do laudo, mas não acompanha as etapas internas da Anatomia Patológica (macroscopia, processamento, microscopia, revisões, IHQ e envios externos). Para cobrir esse vazio, o setor redigita os dados do AGHU em planilhas do Teams, uma aba por tipo de exame, e anota à mão cada etapa. Com cerca de 1.000 solicitações por mês e várias pessoas anotando em momentos diferentes, algumas informações às vezes deixam de ser registradas ou se perdem, sem aviso nem histórico, e outras ficam em fontes separadas (AGHU, papel). Por isso, o setor nem sempre consegue dizer com segurança onde está cada material, quem executou cada etapa nem quanto tempo cada laudo levou. O detalhamento das dores (D1 a D7) e a origem dos números estão na seção 2 do `00-validacao-negocio.md`.
 * **Impacto:**
-  * Sobrecarga de trabalho;
-  * Visibilidade precária dos dados;
-  * Risco de erro no preenchimento dos dados;
-  * Risco institucional e legal.
+  * **Sobrecarga de trabalho:** redigitação de dados que já existem no AGHU, conferência manual e busca de casos pelo WhatsApp;
+  * **Gestão às cegas:** o tempo até o laudo não é medido, e os indicadores da seção 8 do `00-validacao-negocio.md` não têm linha de base;
+  * **Risco ao paciente:** material parado em uma etapa só é percebido quando alguém cobra; não há alerta de atraso;
+  * **Erros de registro:** campos digitados livremente, sem lista de opções nem conferência (urgência, responsáveis, clínica de origem, datas), o que impede somar e cruzar dados;
+  * **Risco institucional e legal:** dados sensíveis, e em algumas abas o texto do laudo, em planilha compartilhada sem controle de acesso nem histórico; autoria das etapas não comprovável;
+  * **Perda de faturamento:** procedimentos realizados (blocos, lâminas, colorações especiais, IHQ) sem registro confiável.
 * **Solução Proposta:**
   **A Proposta de Valor:** *Centralizar o acompanhamento das solicitações e amostras em um único ambiente digital integrado ao AGHU Slave, reaproveitando automaticamente os dados já disponíveis no AGHU e permitindo o registro estruturado das informações específicas do fluxo da Anatomia Patológica. A solução deve possibilitar acompanhar cada caso ao longo das diferentes etapas do processo, desde a recepção da amostra até o processamento, análise, liberação do laudo e arquivamento, reduzindo a dependência de planilhas paralelas e consultas manuais em diferentes telas, considerando os diferentes caminhos que podem ser tomados a depender do exame.*
 
