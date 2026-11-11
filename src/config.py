@@ -1,5 +1,6 @@
 """Configuração central. Falha imediatamente se produção não for segura."""
 import os
+import json
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 
@@ -22,11 +23,8 @@ class Settings:
         or ("POSTGRES" if POSTGRES_DSN else "CSV")
     ).upper()
     PACIENTE_CSV_PATH = os.getenv("PACIENTE_CSV_PATH", "data/pacientes.csv")
-    # AGHU em somente-leitura, salvo habilitacao explicita.
-    PACIENTE_POSTGRES_ESCRITA = (
-        os.getenv("PACIENTE_POSTGRES_ESCRITA", "false").strip().lower()
-        in {"1", "true", "sim", "yes"}
-    )
+    # Invariante: SAP nunca escreve na origem AGHU, independente de ambiente.
+    PACIENTE_POSTGRES_ESCRITA = False
     ORACLE_DSN = os.getenv("ORACLE_DSN", "")
     AD_URL = os.getenv("AD_URL", "")
     AD_BASEDN = os.getenv("AD_BASEDN", "DC=ebserhnet,DC=gov,DC=br")
@@ -39,6 +37,22 @@ class Settings:
     SESSION_REFRESH_HOURS = int(os.getenv("SESSION_REFRESH_HOURS", "12"))
     # Chave AES-256 dos dados sensíveis gravados pelo SAP (32 bytes em base64).
     SAP_DATA_KEY = os.getenv("SAP_DATA_KEY", "")
+    # Horas corridas DESDE ABERTURA DO CASO, apenas se a Chefia validar o critério.
+    SAP_PRAZOS_EXAME_HORAS = os.getenv("SAP_PRAZOS_EXAME_HORAS", "{}")
+
+    @classmethod
+    def prazos_exame_horas(cls) -> dict[str, int]:
+        """Prazos aprovados no ambiente, sem defaults clínicos inventados."""
+        try:
+            dados = json.loads(cls.SAP_PRAZOS_EXAME_HORAS)
+            if not isinstance(dados, dict) or any(
+                k not in {"HP", "CO", "CG", "CCV"} or type(v) is not int or not 1 <= v <= 100000
+                for k, v in dados.items()
+            ):
+                raise ValueError()
+            return dados
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("SAP_PRAZOS_EXAME_HORAS deve ser JSON de horas inteiras positivas por tipo de exame") from exc
 
     @classmethod
     def validate_config(cls) -> None:
@@ -50,7 +64,10 @@ class Settings:
         if len(cls.JWT_SECRET) < 32:
             raise RuntimeError("JWT_SECRET deve ter pelo menos 32 caracteres")
         validar_chave(cls.SAP_DATA_KEY)  # AES-256 obrigatório em todos os ambientes (SPEC.md)
+        cls.prazos_exame_horas()
         if cls.ENV == "production":
+            if cls.PACIENTE_PROVIDER_TYPE != "POSTGRES" or not cls.POSTGRES_DSN:
+                raise RuntimeError("Produção exige catálogo de pacientes AGHU via POSTGRES_DSN")
             banned = {"super-secret-key-change-in-production", "SUA_CHAVE_SECRETA_SUPER_FORTE_AQUI_ALTERAR_EM_PRODUCAO"}
             if len(cls.JWT_SECRET) < 32 or cls.JWT_SECRET in banned:
                 raise RuntimeError("JWT_SECRET forte é obrigatório em produção")

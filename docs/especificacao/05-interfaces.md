@@ -5,9 +5,9 @@
 | Tela Vue | Rota Vue | Backend | Objetivo |
 |---|---|---|---|
 | `Login.vue` | `/login` | `src/routers/auth.py` | Login e recuperação de sessão |
-| `Home.vue` | `/` | `GET /api/dashboard/resumo` | Indicadores do painel (podem ser demonstrativos) |
-| `Pacientes.vue` | `/pacientes` | `/api/pacientes` | Consulta/cadastro conforme capacidades do provedor |
-| `Casos.vue` | `/casos` | `/api/casos` | Abrir caso a partir do AGHU (Recepção), buscar por solicitação, prontuário, identificador, tipo, etapa e status, concluir etapa, encaminhar, retornar e ver histórico |
+| `Home.vue` | `/` | `GET /api/dashboard/resumo` | Indicadores do banco local com dicionário de KPIs; não medidos retornam `null` |
+| `Pacientes.vue` | `/pacientes` | `GET /api/pacientes` | Consulta somente leitura do AGHU (ou CSV offline) |
+| `Casos.vue` | `/casos` | `/api/casos` | Abrir caso com tipo obrigatório do AGHU, buscar, concluir, encaminhar, retornar, conferir e sincronizar cadastro com auditoria |
 | `Configuracoes.vue` | `/configuracoes` | `/api/admin/usuarios`, `/api/admin/ad-user-search/{login}`, `/api/admin/auditoria` | Perfil do usuário (todos); gestão de usuários (Chefia); trilha de auditoria (Chefia e TI) |
 
 O backend ainda expõe `GET /api/auditoria/historico`, autenticado, para histórico de um recurso. A documentação interativa de endpoints é fornecida pela aplicação em `/docs`.

@@ -103,6 +103,16 @@ class CasoSqliteProvider(CasoProviderInterface):
         row = await self._one("caso/inserir_caso.sql", params)
         return int(row["id"])
 
+    async def atualizar_dados_aghu(self, caso_id: int, nome: str, prontuario: Optional[str], agora: str) -> None:
+        """Atualiza o snapshot cifrado de nome/prontuário, nunca o AGHU."""
+        await self._exec("caso/atualizar_dados_aghu.sql", {
+            "caso_id": caso_id,
+            "paciente_nome": cifrar(nome),
+            "prontuario_aghu": cifrar(prontuario),
+            "prontuario_indice": self._indice_prontuario(prontuario),
+            "agora": agora,
+        })
+
     async def inserir_amostra(self, caso_id: int, amostra_aghu: str, descricao: Optional[str]) -> None:
         """Executa `caso/inserir_amostra.sql`."""
         await self._exec(

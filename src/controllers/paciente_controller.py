@@ -31,7 +31,9 @@ TERMO_NUMERICO = re.compile(r"\d[\d.\-\s]*")
 
 def obter_capacidades(provider: PacienteProviderInterface) -> Dict[str, Any]:
     """Retorna a fonte de dados ativa e o que ela permite (usado pelo frontend para exibir ações)."""
-    return {"fonte": provider.fonte, **provider.capacidades()}
+    # Pacientes são de responsabilidade do AGHU. O CSV é um catálogo offline de
+    # testes, nunca uma fonte autorizada para cadastro via API do SAP.
+    return {"fonte": provider.fonte, "escrita": False, "exclusao": False}
 
 
 async def listar_pacientes(

@@ -1,0 +1,21 @@
+flowchart TD
+  A["Peça / solicitação no AGHU"] --> B{"Solicitação e paciente existem no AGHU?"}
+  B -- Não --> R["Regulação cadastra no AGHU; SAP aguarda vínculo oficial"]
+  R --> B
+  B -- Sim --> C["SAP consulta solicitação, amostras e tipo do AGHU (somente leitura)"]
+  C --> D{"Tipo mapeado e solicitação sem ambiguidade?"}
+  D -- Não --> X["Bloquear abertura e encaminhar conflito à TI/Chefia"]
+  D -- Sim --> E["Recepção confirma e abre caso com código interno + auditoria"]
+  E --> F["Recepção registra recebimento e identifica material"]
+  F --> G["Macroscopia → processamento técnico → blocos/lâminas"]
+  G --> H["Microscopia / residente / preceptoria"]
+  H --> I{"Necessita complemento?"}
+  I -- Sim --> J["Registrar pedido/retorno de IHQ, recorte ou rede externa"]
+  J --> H
+  I -- Não --> K["Laudo lançado e liberado no AGHU"]
+  K --> L["Arquivamento físico e digital vinculado ao caso"]
+  E -. "Conferência de cadastro AGHU" .-> M{"Nome/prontuário alterado?"}
+  M -- Sim --> N["Recepção sincroniza snapshot local com auditoria"]
+  M -- "Tipo/identidade divergente" --> X
+  M -- Não --> O["Mantém estado"]
+  N -.-> G

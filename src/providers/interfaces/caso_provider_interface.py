@@ -44,6 +44,10 @@ class CasoProviderInterface(ABC):
         """Insere o caso e devolve o id."""
 
     @abstractmethod
+    async def atualizar_dados_aghu(self, caso_id: int, nome: str, prontuario: Optional[str], agora: str) -> None:
+        """Atualiza apenas o snapshot cadastral local (nome, prontuário e data de sincronização)."""
+
+    @abstractmethod
     async def inserir_amostra(self, caso_id: int, amostra_aghu: str, descricao: Optional[str]) -> None:
         """Vincula uma amostra do AGHU ao caso."""
 

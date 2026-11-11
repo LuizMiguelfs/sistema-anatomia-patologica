@@ -33,6 +33,7 @@ class Caso(Base):
     prontuario_aghu = Column(Text)  # cifrado com AES-256 (SPEC.md)
     prontuario_indice = Column(String(64))  # HMAC-SHA256 do prontuário normalizado, só para busca exata
     tipo_exame = Column(String(3), nullable=False)
+    ultima_sincronizacao_aghu = Column(String(40))  # UTC; sem editar a fonte
     etapa_atual = Column(String(30), nullable=False)
     status = Column(String(30), nullable=False)
     criado_por = Column(String(100), nullable=False)

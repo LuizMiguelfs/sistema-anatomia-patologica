@@ -40,7 +40,25 @@ interface DashboardResumo {
   atualizado_em: string;
   operacional: ResumoOperacional;
   gerencial: IndicadoresGerenciais;
+  criterios: Record<string, string>;
+  prazos_horas_por_tipo: Record<string, number>;
+  prazo_cobertura_casos: number;
 }
+
+const ROTULOS: Record<string, string> = {
+  total_casos: 'Total de casos',
+  casos_pendentes: 'Casos pendentes',
+  casos_atrasados: 'Casos atrasados',
+  aguardando_complementacao: 'Aguardando complementação',
+  tempo_medio_liberacao_horas: 'Tempo médio de liberação',
+  percentual_cumprimento_prazo: 'Cumprimento de prazo',
+  percentual_automacao: 'Automação de dados',
+  percentual_rastreabilidade: 'Rastreabilidade',
+  total_inconsistencias: 'Inconformidades abertas',
+  total_rejeicoes: 'Rejeições',
+  total_erros_transcricao: 'Erros de transcrição',
+};
+const rotuloIndicador = (chave: string) => ROTULOS[chave] || chave;
 
 const uiStore = useUiStore();
 
@@ -49,7 +67,7 @@ const carregando = ref(false);
 const erro = ref<string | null>(null);
 
 const formatarNumero = (valor: number | null | undefined): string => {
-  if (valor == null) return '—';
+  if (valor == null) return 'Não medido';
 
   return new Intl.NumberFormat('pt-BR').format(valor);
 };
@@ -58,7 +76,7 @@ const formatarDecimal = (
   valor: number | null | undefined,
   sufixo = ''
 ): string => {
-  if (valor == null) return '—';
+  if (valor == null) return 'Não medido';
 
   const numero = new Intl.NumberFormat('pt-BR', {
     maximumFractionDigits: 1,
@@ -185,6 +203,29 @@ onMounted(() => {
       <div class="text-right text-xs text-gray-500">
         Atualizado em: {{ formatarData(resumo.atualizado_em) }}
       </div>
+
+      <!-- SLA: a referência é explícita e precisa de homologação da Chefia -->
+      <section class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm">
+        <h2 class="font-semibold text-blue-900">Critério de prazo e cobertura</h2>
+        <p class="mt-1 text-gray-700">
+          Neste painel, “atrasado” é um caso ainda aberto cujo tempo <strong>corrido desde a abertura no SAP</strong>
+          superou o limite configurado para seu tipo. Não equivale automaticamente ao prazo clínico de liberação do laudo.
+        </p>
+        <p v-if="!Object.keys(resumo.prazos_horas_por_tipo || {}).length" class="mt-2 font-medium text-amber-800">
+          Nenhum prazo aprovado foi configurado. Portanto, casos atrasados e taxa de cumprimento não podem ser afirmados.
+        </p>
+        <div v-else class="mt-2">
+          <p><strong>Prazos cadastrados:</strong>
+            <span v-for="(horas, tipo) in resumo.prazos_horas_por_tipo" :key="tipo" class="mr-3">
+              {{ tipo }}: {{ horas }} horas corridas
+            </span>
+          </p>
+          <p class="mt-1">Casos pendentes cobertos por prazo:
+            {{ resumo.prazo_cobertura_casos }} / {{ resumo.operacional.casos_pendentes ?? '—' }}.
+            Quando a cobertura é incompleta, a contagem de atrasados fica indisponível.
+          </p>
+        </div>
+      </section>
 
       <!-- Indicadores operacionais -->
       <section class="space-y-4">
@@ -364,6 +405,20 @@ onMounted(() => {
             </p>
           </Card>
         </div>
+      </section>
+
+      <section class="space-y-3 rounded-lg border border-gray-200 bg-white p-5">
+        <h2 class="text-xl font-bold text-paper-text">Dicionário de indicadores</h2>
+        <p class="text-sm text-gray-600">
+          Definições, população e limitações de cada número. “Não medido” significa que
+          o dado necessário ainda não é capturado pelo sistema, não que o resultado seja zero.
+        </p>
+        <dl class="grid gap-3 md:grid-cols-2">
+          <div v-for="(texto, chave) in resumo.criterios" :key="chave" class="rounded border border-gray-100 bg-gray-50 p-3">
+            <dt class="text-sm font-semibold">{{ rotuloIndicador(chave) }}</dt>
+            <dd class="mt-1 text-xs text-gray-600">{{ texto }}</dd>
+          </div>
+        </dl>
       </section>
     </template>
   </div>

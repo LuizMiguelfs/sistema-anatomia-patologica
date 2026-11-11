@@ -36,8 +36,8 @@ class PacientePostgresProvider(PacienteProviderInterface):
     Provedor de pacientes do AGHU (PostgreSQL, tabela `agh.aip_pacientes`).
 
     - Leitura: sempre disponível.
-    - Escrita (inserir/alterar): só executa com `escrita_habilitada=True`
-      (variável PACIENTE_POSTGRES_ESCRITA). O AGHU é somente leitura (RNF005).
+    - Escrita (inserir/alterar): permanentemente desabilitada no SAP (RNF005);
+      parâmetro legado `escrita_habilitada` é ignorado.
     - Exclusão: não suportada, pois a tabela do AGHU não possui coluna de exclusão
       lógica e exclusão física é proibida pelo framework.
     - CPF/CNS: ainda não mapeados para colunas do AGHU (confirmar no dicionário de dados).
@@ -48,11 +48,12 @@ class PacientePostgresProvider(PacienteProviderInterface):
     def __init__(self, session: AsyncSession, escrita_habilitada: bool = False):
         """Recebe a sessão assíncrona do AGHU e a flag de escrita."""
         self.session = session
-        self.escrita_habilitada = escrita_habilitada
+        # O argumento legado é ignorado por segurança: o SAP não escreve no AGHU.
+        self.escrita_habilitada = False
 
     def capacidades(self) -> Dict[str, bool]:
         """Escrita somente com a flag ligada; exclusão nunca."""
-        return {"escrita": self.escrita_habilitada, "exclusao": False}
+        return {"escrita": False, "exclusao": False}
 
     @staticmethod
     def _normalizar(row: Mapping[str, Any]) -> Dict[str, Any]:
@@ -107,8 +108,7 @@ class PacientePostgresProvider(PacienteProviderInterface):
 
     def _garantir_escrita(self) -> None:
         """Bloqueia qualquer escrita quando a flag não estiver habilitada (defesa em profundidade)."""
-        if not self.escrita_habilitada:
-            raise EscritaAghuDesabilitadaError("Escrita no AGHU desabilitada (PACIENTE_POSTGRES_ESCRITA=false).")
+        raise EscritaAghuDesabilitadaError("SAP não altera dados no AGHU; solicite a correção à origem oficial.")
 
     async def listar_pacientes(
         self, termo: Optional[str] = None, limite: int = 50, offset: int = 0
@@ -133,30 +133,13 @@ class PacientePostgresProvider(PacienteProviderInterface):
         """CPF ainda não mapeado no AGHU: a checagem de duplicidade não se aplica a esta fonte."""
         return False
 
-    @staticmethod
-    def _params_escrita(dados: Dict[str, Any]) -> Dict[str, Any]:
-        """Seleciona apenas as colunas mapeadas no AGHU."""
-        return {
-            "nome": dados.get("nome"),
-            "dt_nascimento": dados.get("dt_nascimento"),
-            "sexo": dados.get("sexo"),
-            "cor": dados.get("cor"),
-            "nome_mae": dados.get("nome_mae"),
-            "nome_pai": dados.get("nome_pai"),
-        }
-
     async def criar_paciente(self, dados: Dict[str, Any]) -> Dict[str, Any]:
-        """Insere um paciente (somente com a flag de escrita habilitada)."""
+        """Operação proibida: cadastro deve ser feito no AGHU."""
         self._garantir_escrita()
-        rows = await self._executar("paciente/inserir_paciente.sql", self._params_escrita(dados), escrita=True)
-        return self._normalizar(rows[0])
 
     async def atualizar_paciente(self, codigo: int, dados: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Atualiza um paciente (somente com a flag de escrita habilitada)."""
+        """Operação proibida: correção deve ser feita no AGHU."""
         self._garantir_escrita()
-        params = {**self._params_escrita(dados), "codigo": codigo}
-        rows = await self._executar("paciente/atualizar_paciente.sql", params, escrita=True)
-        return self._normalizar(rows[0]) if rows else None
 
     async def excluir_paciente(self, codigo: int) -> Optional[Dict[str, Any]]:
         """Não suportado no AGHU (sem coluna de exclusão lógica; exclusão física é proibida)."""

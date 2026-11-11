@@ -373,3 +373,13 @@ Itens ainda sem definição:
 - **Laudo da IHQ:** confirmar com o setor que a IHQ gera laudo próprio anexado ao laudo principal (RF014, RF016).
 
 Itens já definidos com o setor (ver `00-validacao-negocio.md`): a unidade de trabalho é a solicitação de exame do AGHU; Congelação e HP são duas solicitações de exame; formato do identificador interno (RF004, RF006, RF009); dados do AGHU imutáveis e solicitação de exame só com origem no AGHU (RN-01 e RN-02).
+
+
+## Adendo 2026-11-10 — avaliação de produto
+
+As decisões de [`REFINO_POS_AVALIACAO.md`](../REFINO_POS_AVALIACAO.md) prevalecem sobre qualquer
+exemplo legado de cadastro direto de paciente, escolha de tipo de exame ou preenchimento
+manual de dados de origem AGHU. A API de pacientes é consulta somente leitura;
+o exame é resolvido pelo AGHU e o dashboard distingue valores ausentes de zero.
+Requisitos futuros sobre prazos oficiais, sincronização automática e liberação do laudo
+**não** devem ser considerados implementados apenas por constarem desta especificação.

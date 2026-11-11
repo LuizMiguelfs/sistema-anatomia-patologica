@@ -1,4 +1,11 @@
-# Framework-SETISD-HC-UFPE
+# Gestão Digital da Anatomia Patológica — SAP
+
+> **Refino da avaliação (2026-11-10):** a implementação atual torna o cadastro de
+> pacientes somente leitura, deriva o exame do AGHU e permite conferência auditada
+> dos dados do caso. As definições dos indicadores e as pendências clínicas estão
+> em [`docs/REFINO_POS_AVALIACAO.md`](docs/REFINO_POS_AVALIACAO.md).
+> A abertura de casos reais exige validação do campo de tipo de exame pela equipe DBA.
+>
 
 > **Arquitetura Web Full-Stack de Referência (Python / FastAPI + Vue 3 / Vite)**  
 > *Padrão Oficial de Desenvolvimento de Sistemas para o Hospital das Clínicas da UFPE (HC-UFPE / EBSERH).*

@@ -36,15 +36,17 @@ describe('stores/caso', () => {
   it('chama as rotas de abertura e das ações do caso', async () => {
     mockApi.post.mockResolvedValue({ data: {} });
     const store = useCasoStore();
-    await store.abrir('123', 'HP');
+    await store.abrir('123');
     await store.concluirEtapa(7);
     await store.encaminhar(7, 'IHQ', 'painel');
     await store.retornar(7, 'ajuste feito');
+    await store.sincronizarAghu(7);
     expect(mockApi.post.mock.calls).toEqual([
-      ['/api/casos', { solicitacao_aghu: '123', tipo_exame: 'HP' }],
+      ['/api/casos', { solicitacao_aghu: '123' }],
       ['/api/casos/7/concluir-etapa'],
       ['/api/casos/7/encaminhar', { destino: 'IHQ', motivo: 'painel' }],
       ['/api/casos/7/retornar', { motivo: 'ajuste feito' }],
+      ['/api/casos/7/sincronizar-aghu'],
     ]);
   });
 

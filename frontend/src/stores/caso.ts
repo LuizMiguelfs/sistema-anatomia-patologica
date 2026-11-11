@@ -16,6 +16,7 @@ export interface CasoResumo {
 
 export interface CasoDetalhe extends CasoResumo {
   prontuario_aghu?: string | null;
+  ultima_sincronizacao_aghu?: string | null;
   amostras: { id: number; amostra_aghu: string; descricao?: string | null }[];
   acoes: { pode_concluir: boolean; pode_retornar: boolean; destinos_encaminhamento: string[] };
 }
@@ -34,8 +35,17 @@ export interface SolicitacaoAghu {
   solicitacao_aghu: number | string;
   paciente_nome: string;
   prontuario_aghu?: string | null;
+  tipo_exame?: string | null;
   amostras: { amostra_aghu: number | string; descricao?: string | null }[];
   caso_existente: string | null;
+}
+
+export interface ConferenciaAghu {
+  caso_id: number;
+  atualizacao_pendente: boolean;
+  divergencias: Record<string, { anterior: string | null; atual_aghu: string | null }>;
+  ultima_sincronizacao_aghu?: string | null;
+  pode_sincronizar: boolean;
 }
 
 export interface FiltrosCaso {
@@ -79,8 +89,14 @@ export const useCasoStore = defineStore('caso', () => {
   const consultarAghu = async (solicitacao: string): Promise<SolicitacaoAghu> =>
     (await api.get(`/api/casos/aghu/solicitacao/${encodeURIComponent(solicitacao)}`)).data;
 
-  const abrir = async (solicitacao: string, tipoExame: string): Promise<CasoDetalhe> =>
-    (await api.post('/api/casos', { solicitacao_aghu: solicitacao, tipo_exame: tipoExame })).data;
+  const abrir = async (solicitacao: string): Promise<CasoDetalhe> =>
+    (await api.post('/api/casos', { solicitacao_aghu: solicitacao })).data;
+
+  const conferirAghu = async (id: number): Promise<ConferenciaAghu> =>
+    (await api.get(`/api/casos/${id}/conferencia-aghu`)).data;
+
+  const sincronizarAghu = async (id: number): Promise<CasoDetalhe> =>
+    (await api.post(`/api/casos/${id}/sincronizar-aghu`)).data;
 
   const obter = async (id: number): Promise<CasoDetalhe> => (await api.get(`/api/casos/${id}`)).data;
 
@@ -96,5 +112,5 @@ export const useCasoStore = defineStore('caso', () => {
   const retornar = async (id: number, motivo: string): Promise<CasoDetalhe> =>
     (await api.post(`/api/casos/${id}/retornar`, { motivo })).data;
 
-  return { casos, total, loading, buscar, consultarAghu, abrir, obter, historico, concluirEtapa, encaminhar, retornar };
+  return { casos, total, loading, buscar, consultarAghu, abrir, conferirAghu, sincronizarAghu, obter, historico, concluirEtapa, encaminhar, retornar };
 });

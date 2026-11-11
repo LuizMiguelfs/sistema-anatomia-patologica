@@ -69,12 +69,14 @@ class FakeProvider:
     async def inserir_caso(self, d):
         caso_id = len(self.casos) + 1
         self.casos[caso_id] = {"id": caso_id, "identificador_interno": d["identificador_interno"], **{
-            k: d[k] for k in ("solicitacao_aghu", "paciente_nome", "tipo_exame", "etapa_atual", "status")}}
+            k: d[k] for k in ( "solicitacao_aghu", "paciente_codigo_aghu", "paciente_nome", "prontuario_aghu", "tipo_exame", "etapa_atual", "status",  "ultima_sincronizacao_aghu") if k in d}}
         return caso_id
 
     async def proximo_numero(self, sigla, ano):
         self.sequencias[(sigla, ano)] = self.sequencias.get((sigla, ano), 0) + 1
         return self.sequencias[(sigla, ano)]
+    async def atualizar_dados_aghu(self, caso_id, nome, prontuario, agora):
+        self.casos[caso_id].update(paciente_nome=nome, prontuario_aghu=prontuario, ultima_sincronizacao_aghu=agora)
     async def inserir_amostra(self, caso_id, amostra, desc): self.amostras.append({"caso_id": caso_id, "amostra_aghu": amostra})
     async def listar_amostras(self, caso_id): return [a for a in self.amostras if a["caso_id"] == caso_id]
 
@@ -107,7 +109,7 @@ class FakeProvider:
 
 def _aghu_ok():
     return FakeAghu(
-        {"solicitacao_aghu": 123, "paciente_codigo_aghu": 9, "paciente_nome": "Maria da Silva", "prontuario_aghu": 55},
+        {"solicitacao_aghu": 123, "paciente_codigo_aghu": 9, "paciente_nome": "Maria da Silva", "prontuario_aghu": 55, "tipo_exame": "HP"},
         [{"amostra_aghu": 1, "descricao": "BIOPSIA"}, {"amostra_aghu": 2, "descricao": "PECA"}],
     )
 
@@ -132,7 +134,7 @@ async def _status(coro) -> int:
 
 
 async def _abrir(provider, tipo="HP", numero="123"):
-    return await ctrl.abrir_caso(numero, tipo, RECEPCAO, "10.0.0.1", provider, _aghu_ok())
+    return await ctrl.abrir_caso(numero, RECEPCAO, "10.0.0.1", provider, FakeAghu({**_aghu_ok().cabecalho, "tipo_exame": tipo}, _aghu_ok().amostras))
 
 
 # --- UC002 ------------------------------------------------------------------
@@ -155,23 +157,23 @@ async def test_abrir_caso_bloqueia_duplicidade():
 
 async def test_abrir_caso_aghu_indisponivel_nao_cria_registro_parcial():
     p = FakeProvider()
-    codigo = await _status(ctrl.abrir_caso("123", "HP", RECEPCAO, None, p, FakeAghu(falha=True)))
+    codigo = await _status(ctrl.abrir_caso("123", RECEPCAO, None, p, FakeAghu(falha=True)))
     assert codigo == 503 and not p.casos and p.commits == 0
 
 
 async def test_abrir_caso_solicitacao_inexistente_e_sem_amostra():
     p = FakeProvider()
-    assert await _status(ctrl.abrir_caso("123", "HP", RECEPCAO, None, p, FakeAghu(None))) == 404
+    assert await _status(ctrl.abrir_caso("123", RECEPCAO, None, p, FakeAghu(None))) == 404
     sem_amostra = FakeAghu({"solicitacao_aghu": 1, "paciente_codigo_aghu": 1, "paciente_nome": "X"}, [])
-    assert await _status(ctrl.abrir_caso("123", "HP", RECEPCAO, None, p, sem_amostra)) == 422
+    assert await _status(ctrl.abrir_caso("123", RECEPCAO, None, p, sem_amostra)) == 422
 
 
 async def test_abrir_caso_validacoes_e_perfil():
     p = FakeProvider()
-    assert await _status(ctrl.abrir_caso("abc", "HP", RECEPCAO, None, p, _aghu_ok())) == 422
-    assert await _status(ctrl.abrir_caso("123", "XX", RECEPCAO, None, p, _aghu_ok())) == 422
-    assert await _status(ctrl.abrir_caso("123", "HP", LAB, None, p, _aghu_ok())) == 403
-    assert await _status(ctrl.abrir_caso("123", "CO", RECEPCAO, None, p, _aghu_ok())) == 409  # fluxo não configurado
+    assert await _status(ctrl.abrir_caso("abc", RECEPCAO, None, p, _aghu_ok())) == 422
+    assert await _status(ctrl.abrir_caso("123", RECEPCAO, None, p, FakeAghu({**_aghu_ok().cabecalho, "tipo_exame": "XX"}, _aghu_ok().amostras))) == 409
+    assert await _status(ctrl.abrir_caso("123", LAB, None, p, _aghu_ok())) == 403
+    assert await _status(ctrl.abrir_caso("123", RECEPCAO, None, p, FakeAghu({**_aghu_ok().cabecalho, "tipo_exame": "CO"}, _aghu_ok().amostras))) == 409  # fluxo não configurado
 
 
 # --- UC017 ------------------------------------------------------------------
