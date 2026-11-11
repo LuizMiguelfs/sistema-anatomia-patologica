@@ -149,12 +149,17 @@ class MockAuthProvider(AuthProviderInterface):
         }
 
     def authenticate_user(self, username: str, password: str) -> dict:
-        """Login simulado: só o admin, com a senha de MOCK_AUTH_PASSWORD."""
+        """Login simulado: admin e os usuários de demonstração de MOCK_AUTH_USERS, com a senha de MOCK_AUTH_PASSWORD."""
         username = normalize_username(username)
         expected = os.getenv("MOCK_AUTH_PASSWORD", "")
         if not expected:
             raise HTTPException(503, "Mock exige MOCK_AUTH_PASSWORD definido no ambiente")
-        if username != "admin" or not secrets.compare_digest(password or "", expected):
+        # Usuários de demonstração (só no Mock, que já é bloqueado em produção). A autorização
+        # continua exigindo cadastro ativo em `authorized_users`.
+        permitidos = {"admin"} | {
+            normalize_username(u) for u in os.getenv("MOCK_AUTH_USERS", "").split(",") if u.strip()
+        }
+        if username not in permitidos or not secrets.compare_digest(password or "", expected):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Credenciais inválidas")
         info = self.search_user(username)
         return _as_profile(info)

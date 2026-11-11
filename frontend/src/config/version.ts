@@ -6,7 +6,7 @@
 import { ref } from 'vue';
 import api from '../services/api';
 
-export const APP_VERSION = ref('1.0.0');
+export const APP_VERSION = ref('1.1.0');
 export const APP_NAME = ref('SAP — Gestão Digital da Anatomia Patológica');
 export const SYSTEM_TITLE = ref('Gestão Digital da Anatomia Patológica');
 export const HOSPITAL_NAME = ref('Hospital das Clínicas da UFPE (HC-UFPE / EBSERH)');

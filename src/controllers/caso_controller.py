@@ -24,7 +24,10 @@ from ..providers.interfaces.caso_provider_interface import CasoProviderInterface
 
 logger = logging.getLogger("casos")
 
-TIPOS_EXAME = {"HP", "CO", "CG", "CCV"}
+#: Tipos com fluxo no SAP. IHQ e RL (Revisão de Lâmina) entram no MVP com fila própria.
+TIPOS_EXAME = {"HP", "CO", "CG", "CCV", "IHQ", "RL"}
+#: Tipos sempre urgentes (decisão do setor: Congelação).
+TIPOS_SEMPRE_URGENTES = {"CO"}
 ETAPA_ARQUIVO = "ARQUIVO"
 STATUS_EM_ANDAMENTO = "EM_ANDAMENTO"
 STATUS_ARQUIVADO = "ARQUIVADO"
@@ -38,12 +41,14 @@ PERFIL_PRECEPTORIA = "PRECEPTORIA"
 # Quem é "responsável" por cada etapa (alçada para concluir/encaminhar/retornar).
 PERFIS_POR_ETAPA: Dict[str, set] = {
     "RECEPCAO": {PERFIL_RECEPCAO},
-    "MACROSCOPIA": {PERFIL_LABORATORIO},
-    "CONGELACAO": {PERFIL_LABORATORIO},
+    # Matriz de perfis do MVP (ver src/helpers/formularios_fase.py).
+    "MACROSCOPIA": {PERFIL_RESIDENTE},
+    "CONGELACAO": {PERFIL_RESIDENTE, PERFIL_PRECEPTORIA},
     "PROCESSAMENTO": {PERFIL_LABORATORIO},
     "IHQ": {PERFIL_LABORATORIO},
     "REDE_EXTERNA": {PERFIL_LABORATORIO},
     "MICROSCOPIA": {PERFIL_RESIDENTE, PERFIL_PRECEPTORIA},
+    "REVISAO": {PERFIL_RESIDENTE, PERFIL_PRECEPTORIA},
 }
 
 
@@ -235,6 +240,7 @@ async def abrir_caso(
                 "tipo_exame": tipo,
                 "etapa_atual": etapa_inicial,
                 "status": _status_derivado(etapa_inicial),
+                "urgente": tipo in TIPOS_SEMPRE_URGENTES or bool(cabecalho.get("urgente")),
                 "usuario": login,
                 "agora": agora,
             }
@@ -314,6 +320,11 @@ async def concluir_etapa(
     """UC017: avança o caso para a próxima etapa do fluxo, se não houver pendências."""
     caso = await _caso_ou_404(provider, caso_id)
     etapa = caso["etapa_atual"]
+    if etapa == "RECEPCAO" and caso["status"] != STATUS_ARQUIVADO:
+        # Concluir a Recepção é marcar o material como retirado (MVP: Solicitações de Exames).
+        from .solicitacao_controller import marcar_retirado
+        await marcar_retirado(caso_id, usuario, ip, provider)
+        return await obter_caso(caso_id, usuario, provider)
     if caso["status"] == STATUS_ARQUIVADO:
         raise HTTPException(status_code=409, detail="Caso já arquivado.")
     _exigir_perfil(usuario, PERFIS_POR_ETAPA.get(etapa, set()), f"concluir a etapa {etapa}")

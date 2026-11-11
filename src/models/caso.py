@@ -36,6 +36,9 @@ class Caso(Base):
     ultima_sincronizacao_aghu = Column(String(40))  # UTC; sem editar a fonte
     etapa_atual = Column(String(30), nullable=False)
     status = Column(String(30), nullable=False)
+    urgente = Column(Boolean, nullable=False, server_default=expression.false())  # CO é sempre urgente
+    retirado_em = Column(String(40))  # UTC; material retirado da recepção (encerra a etapa RECEPCAO)
+    retirado_por = Column(String(100))
     criado_por = Column(String(100), nullable=False)
     criado_em = Column(String(40), nullable=False)
     atualizado_em = Column(String(40), nullable=False)
@@ -107,3 +110,23 @@ class CasoSequencia(Base):
     sigla = Column(String(3), primary_key=True)
     ano = Column(Integer, primary_key=True)
     ultimo = Column(Integer, nullable=False)
+
+
+class CasoFase(Base):
+    """Formulário de uma fase do setor para o caso: rascunho (Salvar) ou concluído (Concluído)."""
+
+    __tablename__ = "caso_fases"
+    __table_args__ = (
+        UniqueConstraint("caso_id", "etapa"),
+        Index("ix_caso_fases_etapa", "etapa", "situacao"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    caso_id = Column(Integer, ForeignKey("casos.id"), nullable=False)
+    etapa = Column(String(30), nullable=False)
+    dados = Column(Text, nullable=False)  # JSON com os campos do formulário da fase
+    situacao = Column(String(20), nullable=False)  # RASCUNHO | CONCLUIDA
+    salvo_por = Column(String(100), nullable=False)
+    salvo_em = Column(String(40), nullable=False)
+    concluido_por = Column(String(100))
+    concluido_em = Column(String(40))

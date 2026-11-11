@@ -1,0 +1,626 @@
+[
+ {
+  "solicitacao_aghu": 900010,
+  "paciente_codigo_aghu": 7010,
+  "paciente_nome": "JOÃO VICTOR AMARAL",
+  "prontuario_aghu": "10230258",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Peça de colecistectomia"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900001,
+  "paciente_codigo_aghu": 7001,
+  "paciente_nome": "ANA BEATRIZ LACERDA",
+  "prontuario_aghu": "10117739",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Peça de histerectomia"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900026,
+  "paciente_codigo_aghu": 7026,
+  "paciente_nome": "ZECA ALBUQUERQUE MELO",
+  "prontuario_aghu": "10377417",
+  "tipo_exame": "CO",
+  "urgente": true,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Fragmento de nódulo pulmonar (peroperatório)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900034,
+  "paciente_codigo_aghu": 7034,
+  "paciente_nome": "DANIEL FREITAS LOBO",
+  "prontuario_aghu": "10606397",
+  "tipo_exame": "CCV",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Esfregaço cérvico-vaginal"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900023,
+  "paciente_codigo_aghu": 7023,
+  "paciente_nome": "WANESSA LEITE CARVALHO",
+  "prontuario_aghu": "10801581",
+  "tipo_exame": "CO",
+  "urgente": true,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Fragmento de nódulo pulmonar (peroperatório)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900017,
+  "paciente_codigo_aghu": 7017,
+  "paciente_nome": "QUITÉRIA ALVES BEZERRA",
+  "prontuario_aghu": "10618889",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de próstata - lobo direito"
+   },
+   {
+    "amostra_aghu": 2,
+    "descricao": "Biópsia de próstata - lobo esquerdo"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900006,
+  "paciente_codigo_aghu": 7006,
+  "paciente_nome": "FÁBIO NUNES ARRAES",
+  "prontuario_aghu": "10777646",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Peça de histerectomia"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900014,
+  "paciente_codigo_aghu": 7014,
+  "paciente_nome": "NICOLAS BARROS FEITOSA",
+  "prontuario_aghu": "10682453",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia endoscópica de esôfago"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900004,
+  "paciente_codigo_aghu": 7004,
+  "paciente_nome": "DANIEL FREITAS LOBO",
+  "prontuario_aghu": "10147316",
+  "tipo_exame": "HP",
+  "urgente": true,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Peça de apendicectomia"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900012,
+  "paciente_codigo_aghu": 7012,
+  "paciente_nome": "LUCAS RIBEIRO TAVARES",
+  "prontuario_aghu": "10028824",
+  "tipo_exame": "HP",
+  "urgente": true,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Pólipo de cólon"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900043,
+  "paciente_codigo_aghu": 7043,
+  "paciente_nome": "MARIANA GUSMÃO NEVES",
+  "prontuario_aghu": "10373528",
+  "tipo_exame": "RL",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Lâminas externas - revisão (5 lâminas)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900022,
+  "paciente_codigo_aghu": 7022,
+  "paciente_nome": "VITOR HUGO PRADO",
+  "prontuario_aghu": "10164032",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de pele - dorso"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900031,
+  "paciente_codigo_aghu": 7031,
+  "paciente_nome": "ANA BEATRIZ LACERDA",
+  "prontuario_aghu": "10397922",
+  "tipo_exame": "CG",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Líquido pleural"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900020,
+  "paciente_codigo_aghu": 7020,
+  "paciente_nome": "TIAGO MONTEIRO LINS",
+  "prontuario_aghu": "10733052",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia gástrica (antro)"
+   },
+   {
+    "amostra_aghu": 2,
+    "descricao": "Biópsia gástrica (corpo)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900033,
+  "paciente_codigo_aghu": 7033,
+  "paciente_nome": "CARLA MOURA RANGEL",
+  "prontuario_aghu": "10870693",
+  "tipo_exame": "CCV",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Esfregaço cérvico-vaginal"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900024,
+  "paciente_codigo_aghu": 7024,
+  "paciente_nome": "XAVIER PONTES AGUIAR",
+  "prontuario_aghu": "10108175",
+  "tipo_exame": "CO",
+  "urgente": true,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Margem cirúrgica - mama"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900038,
+  "paciente_codigo_aghu": 7038,
+  "paciente_nome": "HEITOR BRANDÃO LEAL",
+  "prontuario_aghu": "10084667",
+  "tipo_exame": "IHQ",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Bloco HP-0098/26 - painel linfoma"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900032,
+  "paciente_codigo_aghu": 7032,
+  "paciente_nome": "BRUNO HENRIQUE SALES",
+  "prontuario_aghu": "10579856",
+  "tipo_exame": "CCV",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Esfregaço cérvico-vaginal"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900029,
+  "paciente_codigo_aghu": 7029,
+  "paciente_nome": "DENISE VALENÇA CASTRO",
+  "prontuario_aghu": "10766179",
+  "tipo_exame": "CG",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Líquido pleural"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900019,
+  "paciente_codigo_aghu": 7019,
+  "paciente_nome": "SOFIA MEDEIROS ROCHA",
+  "prontuario_aghu": "10796667",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de mama esquerda"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900007,
+  "paciente_codigo_aghu": 7007,
+  "paciente_nome": "GABRIELA SOUTO MAIA",
+  "prontuario_aghu": "10092161",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Linfonodo cervical"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900003,
+  "paciente_codigo_aghu": 7003,
+  "paciente_nome": "CARLA MOURA RANGEL",
+  "prontuario_aghu": "10257787",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de pele - dorso"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900009,
+  "paciente_codigo_aghu": 7009,
+  "paciente_nome": "ISABELA PIRES COUTINHO",
+  "prontuario_aghu": "10032244",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de mama esquerda"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900013,
+  "paciente_codigo_aghu": 7013,
+  "paciente_nome": "MARIANA GUSMÃO NEVES",
+  "prontuario_aghu": "10209496",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Linfonodo cervical"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900037,
+  "paciente_codigo_aghu": 7037,
+  "paciente_nome": "GABRIELA SOUTO MAIA",
+  "prontuario_aghu": "10239968",
+  "tipo_exame": "IHQ",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Bloco HP-0110/26 - Ki-67"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900028,
+  "paciente_codigo_aghu": 7028,
+  "paciente_nome": "CAIO MONTENEGRO PAIVA",
+  "prontuario_aghu": "10847335",
+  "tipo_exame": "CG",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "PAAF de tireoide"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900008,
+  "paciente_codigo_aghu": 7008,
+  "paciente_nome": "HEITOR BRANDÃO LEAL",
+  "prontuario_aghu": "10443417",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Pólipo de cólon"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900002,
+  "paciente_codigo_aghu": 7002,
+  "paciente_nome": "BRUNO HENRIQUE SALES",
+  "prontuario_aghu": "10778572",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de mama esquerda"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900036,
+  "paciente_codigo_aghu": 7036,
+  "paciente_nome": "FÁBIO NUNES ARRAES",
+  "prontuario_aghu": "10049050",
+  "tipo_exame": "CCV",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Esfregaço cérvico-vaginal"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900041,
+  "paciente_codigo_aghu": 7041,
+  "paciente_nome": "KARINA DUARTE PASSOS",
+  "prontuario_aghu": "10667563",
+  "tipo_exame": "RL",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Lâminas externas - revisão (5 lâminas)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900027,
+  "paciente_codigo_aghu": 7027,
+  "paciente_nome": "BIANCA VENTURA SÁ",
+  "prontuario_aghu": "10634052",
+  "tipo_exame": "CG",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "PAAF de tireoide"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900021,
+  "paciente_codigo_aghu": 7021,
+  "paciente_nome": "ÚRSULA FONTES GALVÃO",
+  "prontuario_aghu": "10357778",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de colo uterino"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900015,
+  "paciente_codigo_aghu": 7015,
+  "paciente_nome": "OLÍVIA CARDOSO VIANA",
+  "prontuario_aghu": "10572412",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia endoscópica de esôfago"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900044,
+  "paciente_codigo_aghu": 7044,
+  "paciente_nome": "NICOLAS BARROS FEITOSA",
+  "prontuario_aghu": "10703729",
+  "tipo_exame": "RL",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Lâminas externas - revisão (3 lâminas)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900025,
+  "paciente_codigo_aghu": 7025,
+  "paciente_nome": "YASMIN TORRES QUEIROZ",
+  "prontuario_aghu": "10399382",
+  "tipo_exame": "CO",
+  "urgente": true,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Fragmento de nódulo pulmonar (peroperatório)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900030,
+  "paciente_codigo_aghu": 7030,
+  "paciente_nome": "EDUARDO LYRA BATISTA",
+  "prontuario_aghu": "10563275",
+  "tipo_exame": "CG",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Lavado brônquico"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900040,
+  "paciente_codigo_aghu": 7040,
+  "paciente_nome": "JOÃO VICTOR AMARAL",
+  "prontuario_aghu": "10292476",
+  "tipo_exame": "IHQ",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Bloco HP-0098/26 - painel linfoma"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900016,
+  "paciente_codigo_aghu": 7016,
+  "paciente_nome": "PAULO ROBERTO MENEZES",
+  "prontuario_aghu": "10232148",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de colo uterino"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900035,
+  "paciente_codigo_aghu": 7035,
+  "paciente_nome": "ELISA CAMPOS TELES",
+  "prontuario_aghu": "10739797",
+  "tipo_exame": "CCV",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Esfregaço cérvico-vaginal"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900011,
+  "paciente_codigo_aghu": 7011,
+  "paciente_nome": "KARINA DUARTE PASSOS",
+  "prontuario_aghu": "10530903",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Peça de apendicectomia"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900039,
+  "paciente_codigo_aghu": 7039,
+  "paciente_nome": "ISABELA PIRES COUTINHO",
+  "prontuario_aghu": "10106907",
+  "tipo_exame": "IHQ",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Bloco HP-0123/26 - painel mama"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900005,
+  "paciente_codigo_aghu": 7005,
+  "paciente_nome": "ELISA CAMPOS TELES",
+  "prontuario_aghu": "10108473",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia endoscópica de esôfago"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900042,
+  "paciente_codigo_aghu": 7042,
+  "paciente_nome": "LUCAS RIBEIRO TAVARES",
+  "prontuario_aghu": "10171555",
+  "tipo_exame": "RL",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Lâminas externas - revisão (5 lâminas)"
+   }
+  ]
+ },
+ {
+  "solicitacao_aghu": 900018,
+  "paciente_codigo_aghu": 7018,
+  "paciente_nome": "RAFAEL SIQUEIRA DANTAS",
+  "prontuario_aghu": "10849749",
+  "tipo_exame": "HP",
+  "urgente": false,
+  "amostras": [
+   {
+    "amostra_aghu": 1,
+    "descricao": "Biópsia de pele - dorso"
+   }
+  ]
+ }
+]

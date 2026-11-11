@@ -54,6 +54,9 @@ class CasoResumo(BaseModel):
     status: str
     criado_em: str
     atualizado_em: str
+    urgente: Optional[bool] = None
+    retirado_em: Optional[str] = None
+    retirado_por: Optional[str] = None
 
 
 class PaginaCasos(BaseModel):

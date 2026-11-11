@@ -84,8 +84,24 @@ def get_caso_provider(
     return CasoSqliteProvider(session=session)
 
 
-def get_aghu_solicitacao_provider(
+from .providers.implementations.aghu_solicitacao_simulado_provider import AghuSolicitacaoSimuladoProvider
+
+
+def _get_aghu_solicitacao_postgres_provider(
     session: AsyncSession = Depends(get_aghu_db_session),
 ) -> AghuSolicitacaoProviderInterface:
-    """Provedor somente leitura das solicitações de exame no AGHU (RNF005)."""
+    """Provedor somente leitura das solicitações de exame no AGHU Slave (RNF005)."""
     return AghuSolicitacaoPostgresProvider(session=session)
+
+
+def _get_aghu_solicitacao_simulado_provider() -> AghuSolicitacaoProviderInterface:
+    """Provedor de solicitações FICTÍCIAS (JSON) para desenvolvimento e demonstração."""
+    return AghuSolicitacaoSimuladoProvider(caminho=settings.AGHU_SIMULADO_PATH)
+
+
+#: Estratégia escolhida por AGHU_PROVIDER_TYPE (produção exige POSTGRES, ver config.py).
+get_aghu_solicitacao_provider = (
+    _get_aghu_solicitacao_postgres_provider
+    if settings.AGHU_PROVIDER_TYPE == "POSTGRES"
+    else _get_aghu_solicitacao_simulado_provider
+)

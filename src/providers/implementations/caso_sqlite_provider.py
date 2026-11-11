@@ -8,6 +8,7 @@ sejam gravados de forma atômica.
 Nome e prontuário do paciente são gravados cifrados (AES-256) e decifrados na leitura;
 a busca por prontuário usa o índice HMAC (`prontuario_indice`), nunca o valor em claro.
 """
+import json
 import os
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
@@ -186,3 +187,76 @@ class CasoSqliteProvider(CasoProviderInterface):
         """Executa `caso/etapa_inicial.sql`."""
         row = await self._one("caso/etapa_inicial.sql", {"tipo_exame": tipo_exame})
         return row["etapa_destino"] if row else None
+
+    # --- MVP: Solicitações de Exames, retirada e formulários por fase ---------
+    @staticmethod
+    def _filtros_busca(filtros: Dict[str, Any]) -> Dict[str, Any]:
+        """Parâmetros da busca única por código AGHU, código interno ou prontuário (índice HMAC)."""
+        busca = filtros.get("busca")
+        return {
+            "tipo_exame": filtros.get("tipo_exame"),
+            "busca": busca,
+            "busca_identificador": busca.upper() if busca else None,
+            "busca_prontuario": CasoSqliteProvider._indice_prontuario(busca) if busca else None,
+        }
+
+    def _filtros_solicitacoes(self, filtros: Dict[str, Any]) -> Dict[str, Any]:
+        """Parâmetros de `caso/listar_solicitacoes.sql` e `caso/contar_solicitacoes.sql`."""
+        return {
+            **self._filtros_busca(filtros),
+            "situacao": filtros["situacao"], "de": filtros.get("de"), "ate": filtros.get("ate"),
+        }
+
+    async def listar_solicitacoes(self, filtros: Dict[str, Any], limite: int, deslocamento: int) -> List[Dict[str, Any]]:
+        """Executa `caso/listar_solicitacoes.sql`."""
+        return await self._all(
+            "caso/listar_solicitacoes.sql",
+            {**self._filtros_solicitacoes(filtros), "limite": limite, "deslocamento": deslocamento},
+        )
+
+    async def contar_solicitacoes(self, filtros: Dict[str, Any]) -> int:
+        """Executa `caso/contar_solicitacoes.sql`."""
+        row = await self._one("caso/contar_solicitacoes.sql", self._filtros_solicitacoes(filtros))
+        return int(row["total"]) if row else 0
+
+    async def listar_fila(
+        self, etapa: str, filtros: Dict[str, Any], concluidas_desde: str, limite: int, deslocamento: int
+    ) -> List[Dict[str, Any]]:
+        """Executa `caso/listar_fila_fase.sql`."""
+        return await self._all("caso/listar_fila_fase.sql", {
+            **self._filtros_busca(filtros), "etapa": etapa, "concluidas_desde": concluidas_desde,
+            "limite": limite, "deslocamento": deslocamento,
+        })
+
+    async def contar_fila(self, etapa: str, filtros: Dict[str, Any], concluidas_desde: str) -> int:
+        """Executa `caso/contar_fila_fase.sql`."""
+        row = await self._one("caso/contar_fila_fase.sql", {
+            **self._filtros_busca(filtros), "etapa": etapa, "concluidas_desde": concluidas_desde,
+        })
+        return int(row["total"]) if row else 0
+
+    async def marcar_retirada(self, caso_id: int, etapa_atual: str, status: str, usuario: str, agora: str) -> None:
+        """Executa `caso/marcar_retirada.sql`."""
+        await self._exec("caso/marcar_retirada.sql", {
+            "caso_id": caso_id, "etapa_atual": etapa_atual, "status": status, "usuario": usuario, "agora": agora,
+        })
+
+    async def desfazer_retirada(self, caso_id: int, status: str, agora: str) -> None:
+        """Executa `caso/desfazer_retirada.sql`."""
+        await self._exec("caso/desfazer_retirada.sql", {"caso_id": caso_id, "status": status, "agora": agora})
+
+    async def buscar_fase(self, caso_id: int, etapa: str) -> Optional[Dict[str, Any]]:
+        """Executa `caso/buscar_fase.sql` e decodifica o JSON do formulário."""
+        row = await self._one("caso/buscar_fase.sql", {"caso_id": caso_id, "etapa": etapa})
+        if row:
+            row["dados"] = json.loads(row["dados"] or "{}")
+        return row
+
+    async def salvar_fase(self, dados: Dict[str, Any]) -> None:
+        """Executa `caso/salvar_fase.sql` (formulário gravado como JSON)."""
+        await self._exec("caso/salvar_fase.sql", {
+            "caso_id": dados["caso_id"], "etapa": dados["etapa"],
+            "dados": json.dumps(dados["dados"], ensure_ascii=False),
+            "situacao": dados["situacao"], "usuario": dados["usuario"], "agora": dados["agora"],
+            "concluido_por": dados.get("concluido_por"), "concluido_em": dados.get("concluido_em"),
+        })
