@@ -106,6 +106,16 @@ class FakeProvider:
     async def contar_casos(self, filtros):
         return len(await self.listar_casos(filtros, 1000, 0))
 
+    # MVP: retirada da recepção e formulários por fase
+    async def marcar_retirada(self, caso_id, etapa, status, usuario, agora):
+        self.casos[caso_id].update(etapa_atual=etapa, status=status, retirado_em=agora, retirado_por=usuario)
+
+    async def desfazer_retirada(self, caso_id, status, agora):
+        self.casos[caso_id].update(etapa_atual="RECEPCAO", status=status, retirado_em=None, retirado_por=None)
+
+    async def buscar_fase(self, caso_id, etapa):
+        return None
+
 
 def _aghu_ok():
     return FakeAghu(
@@ -182,8 +192,8 @@ async def test_concluir_etapa_avanca_conforme_fluxo_e_respeita_alcada(auditoria)
     await _abrir(p)
     assert await _status(ctrl.concluir_etapa(1, LAB, None, p)) == 403  # Recepção é alçada da Recepção
     caso = await ctrl.concluir_etapa(1, RECEPCAO, None, p)
-    assert caso["etapa_atual"] == "MACROSCOPIA"
-    assert p.movs[-1]["tipo"] == "CONCLUSAO"
+    assert caso["etapa_atual"] == "MACROSCOPIA" and caso["retirado_em"]
+    assert p.movs[-1]["tipo"] == "RETIRADA"  # concluir a Recepção = material retirado
     assert auditoria[-1]["dados_anteriores"]["etapa_atual"] == "RECEPCAO"
 
 
@@ -199,7 +209,8 @@ async def test_status_derivado_arquivado_e_nao_avanca_depois():
     p = FakeProvider()
     await _abrir(p)
     await ctrl.concluir_etapa(1, RECEPCAO, None, p)
-    await ctrl.concluir_etapa(1, LAB, None, p)
+    assert await _status(ctrl.concluir_etapa(1, LAB, None, p)) == 403  # Macroscopia é dos Residentes
+    await ctrl.concluir_etapa(1, RESIDENTE, None, p)
     await ctrl.concluir_etapa(1, LAB, None, p)  # PROCESSAMENTO -> MICROSCOPIA
     caso = await ctrl.concluir_etapa(1, RESIDENTE, None, p)
     assert caso["etapa_atual"] == "ARQUIVO" and caso["status"] == "ARQUIVADO"
@@ -211,7 +222,7 @@ async def _levar_a_microscopia(p, tipo="HP"):
     await _abrir(p, tipo)
     await ctrl.concluir_etapa(1, RECEPCAO, None, p)
     if tipo == "HP":
-        await ctrl.concluir_etapa(1, LAB, None, p)  # MACROSCOPIA
+        await ctrl.concluir_etapa(1, RESIDENTE, None, p)  # MACROSCOPIA (Residentes)
     await ctrl.concluir_etapa(1, LAB, None, p)  # PROCESSAMENTO
 
 

@@ -46,9 +46,9 @@ interface DashboardResumo {
 }
 
 const ROTULOS: Record<string, string> = {
-  total_casos: 'Total de casos',
-  casos_pendentes: 'Casos pendentes',
-  casos_atrasados: 'Casos atrasados',
+  total_casos: 'Total de solicitações',
+  casos_pendentes: 'Solicitações pendentes',
+  casos_atrasados: 'Solicitações atrasadas',
   aguardando_complementacao: 'Aguardando complementação',
   tempo_medio_liberacao_horas: 'Tempo médio de liberação',
   percentual_cumprimento_prazo: 'Cumprimento de prazo',
@@ -208,11 +208,11 @@ onMounted(() => {
       <section class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm">
         <h2 class="font-semibold text-blue-900">Critério de prazo e cobertura</h2>
         <p class="mt-1 text-gray-700">
-          Neste painel, “atrasado” é um caso ainda aberto cujo tempo <strong>corrido desde a abertura no SAP</strong>
+          Neste painel, “atrasada” é uma solicitação ainda aberta cujo tempo <strong>corrido desde a abertura no SAP</strong>
           superou o limite configurado para seu tipo. Não equivale automaticamente ao prazo clínico de liberação do laudo.
         </p>
         <p v-if="!Object.keys(resumo.prazos_horas_por_tipo || {}).length" class="mt-2 font-medium text-amber-800">
-          Nenhum prazo aprovado foi configurado. Portanto, casos atrasados e taxa de cumprimento não podem ser afirmados.
+          Nenhum prazo aprovado foi configurado. Portanto, solicitações atrasadas e taxa de cumprimento não podem ser afirmados.
         </p>
         <div v-else class="mt-2">
           <p><strong>Prazos cadastrados:</strong>
@@ -220,7 +220,7 @@ onMounted(() => {
               {{ tipo }}: {{ horas }} horas corridas
             </span>
           </p>
-          <p class="mt-1">Casos pendentes cobertos por prazo:
+          <p class="mt-1">Solicitações pendentes cobertas por prazo:
             {{ resumo.prazo_cobertura_casos }} / {{ resumo.operacional.casos_pendentes ?? '—' }}.
             Quando a cobertura é incompleta, a contagem de atrasados fica indisponível.
           </p>
@@ -239,7 +239,7 @@ onMounted(() => {
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card>
             <p class="text-sm font-medium text-gray-500">
-              Total de casos
+              Total de solicitações
             </p>
             <p class="mt-3 text-3xl font-bold text-gray-800">
               {{ formatarNumero(resumo.operacional.total_casos) }}
@@ -248,7 +248,7 @@ onMounted(() => {
 
           <Card>
             <p class="text-sm font-medium text-gray-500">
-              Casos pendentes
+              Solicitações pendentes
             </p>
             <p class="mt-3 text-3xl font-bold text-gray-800">
               {{ formatarNumero(resumo.operacional.casos_pendentes) }}
@@ -257,7 +257,7 @@ onMounted(() => {
 
           <Card>
             <p class="text-sm font-medium text-gray-500">
-              Casos atrasados
+              Solicitações atrasadas
             </p>
             <p class="mt-3 text-3xl font-bold text-red-700">
               {{ formatarNumero(resumo.operacional.casos_atrasados) }}

@@ -23,6 +23,12 @@ class Settings:
         or ("POSTGRES" if POSTGRES_DSN else "CSV")
     ).upper()
     PACIENTE_CSV_PATH = os.getenv("PACIENTE_CSV_PATH", "data/pacientes.csv")
+    # Solicitações do AGHU: POSTGRES (AGHU Slave) ou SIMULADO (JSON fictício, só fora de produção).
+    AGHU_PROVIDER_TYPE = (
+        os.getenv("AGHU_PROVIDER_TYPE", "").strip()
+        or ("POSTGRES" if POSTGRES_DSN else "SIMULADO")
+    ).upper()
+    AGHU_SIMULADO_PATH = os.getenv("AGHU_SIMULADO_PATH", "data/aghu_simulado.json")
     # Invariante: SAP nunca escreve na origem AGHU, independente de ambiente.
     PACIENTE_POSTGRES_ESCRITA = False
     ORACLE_DSN = os.getenv("ORACLE_DSN", "")
@@ -65,7 +71,11 @@ class Settings:
             raise RuntimeError("JWT_SECRET deve ter pelo menos 32 caracteres")
         validar_chave(cls.SAP_DATA_KEY)  # AES-256 obrigatório em todos os ambientes (SPEC.md)
         cls.prazos_exame_horas()
+        if cls.AGHU_PROVIDER_TYPE not in {"POSTGRES", "SIMULADO"}:
+            raise RuntimeError("AGHU_PROVIDER_TYPE deve ser POSTGRES ou SIMULADO")
         if cls.ENV == "production":
+            if cls.AGHU_PROVIDER_TYPE != "POSTGRES":
+                raise RuntimeError("Produção exige solicitações do AGHU real (AGHU_PROVIDER_TYPE=POSTGRES)")
             if cls.PACIENTE_PROVIDER_TYPE != "POSTGRES" or not cls.POSTGRES_DSN:
                 raise RuntimeError("Produção exige catálogo de pacientes AGHU via POSTGRES_DSN")
             banned = {"super-secret-key-change-in-production", "SUA_CHAVE_SECRETA_SUPER_FORTE_AQUI_ALTERAR_EM_PRODUCAO"}

@@ -119,7 +119,7 @@ if os.path.exists(assets_dir):
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Roteadores da API
-from .routers import paciente, auth, admin, health, dashboard, auditoria, usuarios, caso
+from .routers import paciente, auth, admin, health, dashboard, auditoria, usuarios, caso, solicitacao, fase
 app.include_router(health.router)
 app.include_router(paciente.router)
 app.include_router(auth.router)
@@ -128,6 +128,8 @@ app.include_router(dashboard.router)
 app.include_router(auditoria.router)
 app.include_router(usuarios.router)
 app.include_router(caso.router)
+app.include_router(solicitacao.router)
+app.include_router(fase.router)
 
 @app.get("/{full_path:path}", response_model=None)
 async def serve_frontend(full_path: str) -> Union[FileResponse, Dict[str, str]]:

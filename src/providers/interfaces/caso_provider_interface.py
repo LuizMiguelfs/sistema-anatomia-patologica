@@ -90,3 +90,38 @@ class CasoProviderInterface(ABC):
     @abstractmethod
     async def etapa_inicial(self, tipo_exame: str) -> Optional[str]:
         """Primeira etapa do fluxo do tipo de exame, ou None se não configurado."""
+
+    # --- MVP: Solicitações de Exames, retirada e formulários por fase ---------
+    @abstractmethod
+    async def listar_solicitacoes(self, filtros: Dict[str, Any], limite: int, deslocamento: int) -> List[Dict[str, Any]]:
+        """Página de "Não retirados" ou "Retirados" (filtros: situacao, tipo_exame, de, ate, busca)."""
+
+    @abstractmethod
+    async def contar_solicitacoes(self, filtros: Dict[str, Any]) -> int:
+        """Total de "Não retirados" ou "Retirados" conforme os filtros."""
+
+    @abstractmethod
+    async def listar_fila(
+        self, etapa: str, filtros: Dict[str, Any], concluidas_desde: str, limite: int, deslocamento: int
+    ) -> List[Dict[str, Any]]:
+        """Fila da fase: pendentes da etapa e concluídas desde `concluidas_desde` (filtros: tipo_exame, busca)."""
+
+    @abstractmethod
+    async def contar_fila(self, etapa: str, filtros: Dict[str, Any], concluidas_desde: str) -> int:
+        """Total da fila da fase."""
+
+    @abstractmethod
+    async def marcar_retirada(self, caso_id: int, etapa_atual: str, status: str, usuario: str, agora: str) -> None:
+        """Registra a retirada da recepção e a nova etapa da solicitação."""
+
+    @abstractmethod
+    async def desfazer_retirada(self, caso_id: int, status: str, agora: str) -> None:
+        """Desfaz a retirada: a solicitação volta à etapa RECEPCAO."""
+
+    @abstractmethod
+    async def buscar_fase(self, caso_id: int, etapa: str) -> Optional[Dict[str, Any]]:
+        """Formulário da fase da solicitação (dados já decodificados do JSON), ou None."""
+
+    @abstractmethod
+    async def salvar_fase(self, dados: Dict[str, Any]) -> None:
+        """Cria ou substitui o formulário da fase (caso_id, etapa, dados, situacao, usuario, agora, concluido_*)."""

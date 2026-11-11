@@ -16,7 +16,8 @@
         class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
       >
         <div 
-          class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all"
+          :class="larguraClasse"
+          class="bg-white rounded-2xl shadow-2xl w-full overflow-hidden transform transition-all"
           @click.stop
         >
           <!-- Header -->
@@ -33,7 +34,7 @@
           </div>
 
           <!-- Body -->
-          <div class="px-6 py-6 text-gray-600 leading-relaxed">
+          <div class="px-6 py-6 text-gray-600 leading-relaxed max-h-[70vh] overflow-y-auto">
             <slot></slot>
           </div>
 
@@ -48,12 +49,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue';
+import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
   show: { type: Boolean, default: false },
+  /** Largura do modal: 'lg' (padrão) ou 'xl' (formulários das fases). */
+  largura: { type: String, default: 'lg' },
 });
+
+const larguraClasse = computed(() => (props.largura === 'xl' ? 'max-w-3xl' : 'max-w-lg'));
 
 const emit = defineEmits(['close']);
 const close = () => emit('close');

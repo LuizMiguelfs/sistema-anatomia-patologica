@@ -81,11 +81,11 @@ def test_fluxo_completo_pela_api(api):
     assert client.post(f"/api/casos/{caso['id']}/concluir-etapa", headers=rec).status_code == 403  # alçada
 
     hist = client.get(f"/api/casos/{caso['id']}/historico", headers=_h("bia.lab", "LABORATORIO")).json()
-    assert [m["tipo"] for m in hist] == ["ABERTURA", "CONCLUSAO"]
+    assert [m["tipo"] for m in hist] == ["ABERTURA", "RETIRADA"]
 
     with sqlite3.connect(db) as conn:
         acoes = [r[0] for r in conn.execute("SELECT acao FROM audit_logs WHERE recurso = ?", (f"caso:{caso['id']}",))]
-    assert acoes == ["ABRIR_CASO", "CONCLUIR_ETAPA"]
+    assert acoes == ["ABRIR_CASO", "MARCAR_RETIRADO"]
 
 
 def test_exige_autenticacao(api):
