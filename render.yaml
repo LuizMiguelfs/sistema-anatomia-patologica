@@ -1,0 +1,36 @@
+# Render Blueprint — uso exclusivo como DEMONSTRAÇÃO PÚBLICA, sem dados reais.
+services:
+  - type: web
+    name: sap-anatomia-patologica-demo
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENV
+        value: development
+      - key: AGHU_PROVIDER_TYPE
+        value: SIMULADO
+      - key: PACIENTE_PROVIDER_TYPE
+        value: CSV
+      - key: AUTH_ALLOW_MOCK
+        value: "true"
+      - key: DEMO_SEED
+        value: "true"
+      - key: MOCK_AUTH_USERS
+        value: demo.recepcao,demo.residente,demo.patologista,demo.laboratorio,demo.chefia
+      - key: MOCK_AUTH_PASSWORD
+        sync: false  # senha forte informada no painel; não salvar no Git
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SAP_DATA_KEY
+        generateValue: true
+      - key: REFRESH_COOKIE_SECURE
+        value: "true"
+      - key: APP_DB_URL
+        value: sqlite+aiosqlite:////app/data/app.db
+      - key: AGHU_SIMULADO_PATH
+        value: data/aghu_simulado.json
+      - key: PACIENTE_CSV_PATH
+        value: data/pacientes.csv
+      - key: SAP_PRAZOS_EXAME_HORAS
+        value: "{}"
