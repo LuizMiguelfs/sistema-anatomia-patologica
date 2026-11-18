@@ -5,12 +5,44 @@
 | Tela Vue | Rota Vue | Backend | Objetivo |
 |---|---|---|---|
 | `Login.vue` | `/login` | `src/routers/auth.py` | Login e recuperação de sessão |
-| `Home.vue` | `/` | `GET /api/dashboard/resumo` | Indicadores do banco local com dicionário de KPIs; não medidos retornam `null` |
-| `Configuracoes.vue` | `/configuracoes` | `/api/admin/usuarios`, `/api/admin/ad-user-search/{login}`, `/api/admin/auditoria` | Perfil do usuário (todos); gestão de usuários (Chefia); trilha de auditoria (Chefia e TI) |
+| `Home.vue` (Início) | `/` | `GET /api/dashboard/resumo` | Retrato das filas agora (não retiradas, pendentes e urgentes por fase, aguardando o patologista), indicadores do banco local e dicionário de KPIs; o que não é medido vem `null` e aparece como "Não medido" |
+| `Solicitacoes.vue` | `/solicitacoes/nao-retirados`, `/solicitacoes/retirados`, `/solicitacoes/arquivados` | `GET /api/solicitacoes`, `POST /api/solicitacoes/{id}/retirar` e `/desfazer-retirada` | Solicitações de Exames: Não retirados (urgentes no topo, mais antigas primeiro) e Retirados (mais recentes primeiro), com filtros por tipo, período e busca por prontuário, código AGHU ou código interno. Só a Recepção marca e desfaz a retirada. Arquivados aparece "em breve" |
+| `Fase.vue` + `FormularioFase.vue` + `LinhaDoTempo.vue` | `/fases/macroscopia`, `/fases/congelacao`, `/fases/processamento`, `/fases/ihq`, `/fases/microscopia`, `/fases/revisao-de-lamina` | `/api/fases/...` e `GET /api/auditoria/historico` | Fila de cada fase (urgentes no topo, mais antigas primeiro; concluídas ficam 6 dias para edição) e formulário com Salvar e Concluído. Todos os perfis veem; só o perfil da matriz edita. Embaixo, o histórico da solicitação |
+| `Configuracoes.vue` + `TrilhaAuditoria.vue` | `/configuracoes` | `/api/admin/usuarios`, `/api/admin/ad-user-search/{login}`, `/api/admin/auditoria` | Perfil do usuário (todos); gestão de usuários (Chefia); trilha de auditoria com ações em português (Chefia e TI) |
 
-As telas antigas `Pacientes.vue` e `Casos.vue` saíram do frontend; `/pacientes` e `/casos` levam ao Início. A API `/api/pacientes` (somente consulta) continua. A antiga `/api/casos` passou a `/api/solicitacoes` (T4.1): `GET /api/solicitacoes` lista Não retirados/Retirados, `GET /api/solicitacoes/busca` é a busca com filtros de etapa e status, `POST /api/solicitacoes` abre a solicitação do AGHU e `/api/solicitacoes/{id}/...` traz o detalhe, a retirada, o encaminhamento, o retorno e a conferência com o AGHU.
+`/pacientes` e `/casos` (telas antigas) levam ao Início. O cabeçalho de todas as telas mostra o nome e o perfil de quem entrou. A documentação interativa dos endpoints fica em `/docs`.
 
-O backend ainda expõe `GET /api/auditoria/historico`, autenticado, para histórico de um recurso. A documentação interativa de endpoints é fornecida pela aplicação em `/docs`.
+### Solicitações de exame (`/api/solicitacoes`)
+
+| Método e rota | Quem | O que faz |
+|---|---|---|
+| `GET /api/solicitacoes?situacao=NAO_RETIRADO\|RETIRADO` | Todos | Lista das abas Não retirados e Retirados, com `tipo_exame`, `de`, `ate`, `busca`, `pagina`, `limite` |
+| `POST /api/solicitacoes/{id}/retirar` | Recepção | Marca o material como retirado e envia a solicitação à primeira fase do tipo de exame (encerra a Recepção) |
+| `POST /api/solicitacoes/{id}/desfazer-retirada` | Recepção | Desfaz enquanto a fase seguinte não registrou nada (409 depois disso) |
+| `POST /api/solicitacoes` | Recepção | Abre no SAP a solicitação recebida no AGHU (`{"solicitacao_aghu"}`); tipo de exame e paciente vêm do AGHU |
+| `GET /api/solicitacoes/busca` | Todos | Busca com filtros de número AGHU, prontuário, identificador, tipo, etapa e status |
+| `GET /api/solicitacoes/{id}` | Todos | Detalhe com amostras e `acoes` (`pode_concluir`, `pode_retornar`, destinos de encaminhamento) para o perfil |
+| `GET /api/solicitacoes/{id}/historico` | Todos | Movimentações da solicitação |
+| `POST /api/solicitacoes/{id}/encaminhar` | Perfil responsável pela etapa atual | Desvio para outra etapa permitida pelo fluxo (ex.: IHQ pedida na Microscopia), com motivo obrigatório |
+| `POST /api/solicitacoes/{id}/retornar` | Perfil responsável pela etapa atual | Devolve à etapa de origem do encaminhamento, com motivo |
+| `GET /api/solicitacoes/aghu/solicitacao/{numero}`, `GET /api/solicitacoes/{id}/conferencia-aghu`, `POST /api/solicitacoes/{id}/sincronizar-aghu` | Recepção (conferir e sincronizar) | Pré-visualização do AGHU e conferência dos dados cadastrais, sem editar a fonte (RN-01) |
+
+### Fases do setor (`/api/fases`)
+
+| Método e rota | Quem | O que faz |
+|---|---|---|
+| `GET /api/fases` | Todos | Definição das fases: rótulo, grupo, perfis que salvam e concluem, campos e prazo de edição |
+| `GET /api/fases/{etapa}/fila` | Todos | Fila da fase: pendentes e concluídas ainda editáveis |
+| `GET /api/fases/{etapa}/solicitacoes/{id}` | Todos | Formulário da solicitação, com `pode_salvar`, `pode_concluir` e `editavel` por campo para o perfil |
+| `PUT /api/fases/{etapa}/solicitacoes/{id}` | Perfis que salvam (matriz) | Salvar: grava o rascunho sem exigir obrigatórios; numa fase concluída há até 6 dias, edita exigindo os obrigatórios |
+| `POST /api/fases/{etapa}/solicitacoes/{id}/concluir` | Perfis que concluem (matriz) | Concluído: exige os obrigatórios e envia à próxima fase (ou de volta à fase de origem, se veio por encaminhamento) |
+
+Uma etapa só avança por `retirar` (Recepção) ou pelo `concluir` do formulário (RN-03). Campos que o perfil não edita (ex.: diagnóstico para Residentes) são ignorados no envio. Matriz de perfis: Macroscopia (Residentes); Congelação, Microscopia e Revisão de Lâmina (Residentes e patologista salvam, patologista conclui); Processamento Técnico e IHQ (Laboratório); Chefia visualiza tudo e não edita. Os campos dos formulários estão em `src/helpers/formularios_fase.py` e ainda serão definidos com o setor.
+
+### Painel e histórico
+
+- `GET /api/dashboard/resumo`: `operacional`, `gerencial`, `criterios` (definição de cada número) e `filas` (`RetratoFilas`: não retiradas, urgentes, aguardando o patologista e uma `FilaFase` por fase). Só contagens, sem dados de paciente.
+- `GET /api/auditoria/historico?recurso=solicitacao:{id}`: linha do tempo da solicitação para qualquer usuário autenticado, só eventos `NEGOCIO_CLINICO` e sem IP. Inclui os registros antigos gravados como `caso:{id}`.
 
 ### Gestão de usuários (RF028 / UC026)
 
@@ -26,11 +58,11 @@ Não existe rota de exclusão de usuário. Perfis aceitos: `RECEPCAO`, `LABORATO
 
 ## Contrato de integração
 
-- Cliente HTTP central: `frontend/src/services/api.ts`, com cookies, token bearer e uma única tentativa de renovação após 401. Services de domínio (ex.: `services/usuarios.ts`) usam esse cliente e têm `.spec.ts` ao lado.
-- Sessão do usuário: `frontend/src/stores/auth.ts`. Rotas privadas passam por guarda no `frontend/src/router/index.ts`.
-- UI compartilhada: `Button.vue`, `Card.vue`, `DataTable.vue`, `Modal.vue` e `LoadingIndicator.vue`.
-- A integração AGHU/LDAP depende de credenciais e de rede interna; o modo CSV/Mock serve apenas para desenvolvimento, não equivale a integração real.
-- Operações de cadastro/edição de pacientes estão sujeitas à configuração do provedor; a origem AGHU deve ser tratada como somente leitura em produção.
+- Cliente HTTP central: `frontend/src/services/api.ts`, com cookies, token bearer e uma única tentativa de renovação após 401. Services de domínio usam esse cliente e têm `.spec.ts` ao lado: `solicitacoes.ts`, `fases.ts`, `auditoria.ts` (rótulos das ações), `historico.ts` (linha do tempo), `painel.ts` (retrato das filas) e `usuarios.ts`.
+- Sessão do usuário: `frontend/src/stores/auth.ts` (inclui o rótulo do perfil exibido no cabeçalho). Rotas privadas passam por guarda no `frontend/src/router/index.ts`.
+- UI compartilhada: `Button.vue`, `Card.vue`, `DataTable.vue`, `Modal.vue`, `LoadingIndicator.vue`, `FormularioFase.vue`, `LinhaDoTempo.vue` e `TrilhaAuditoria.vue`.
+- A integração AGHU/LDAP depende de credenciais e de rede interna. Em desenvolvimento, o AGHU simulado (`AGHU_PROVIDER_TYPE=SIMULADO`, dados fictícios em `data/aghu_simulado.json`) e o login simulado servem só para demonstração e não equivalem à integração real.
+- A origem AGHU é somente leitura: o SAP não edita dados de paciente nem da solicitação (RN-01).
 
 ## Dependências externas ainda sujeitas a validação
 

@@ -6,8 +6,9 @@ O framework utiliza **dois contextos de persistência independentes**:
 
 | Contexto | Banco | Configuração | Responsabilidade |
 |---|---|---|---|
-| Aplicação (SAP) | SQLite assíncrono | `APP_DB_URL` (ou `SQLITE_DSN`) | `authorized_users`, `refresh_tokens`, `audit_logs` |
-| AGHU | PostgreSQL assíncrono | `POSTGRES_DSN` | Consulta de pacientes e dados da origem, sem escrita em produção |
+| Aplicação (SAP) | SQLite assíncrono | `APP_DB_URL` (ou `SQLITE_DSN`) | `authorized_users`, `refresh_tokens`, `audit_logs` e as tabelas das solicitações de exame (abaixo) |
+| AGHU | PostgreSQL assíncrono | `POSTGRES_DSN` | Consulta de pacientes e solicitações da origem, somente leitura (RN-01) |
+| AGHU simulado (desenvolvimento) | JSON | `AGHU_PROVIDER_TYPE=SIMULADO`, `AGHU_SIMULADO_PATH` | Solicitações fictícias para demonstração, sem AGHU; proibido em produção |
 | Desenvolvimento offline | CSV | `PACIENTE_CSV_PATH` | Simulação do catálogo de pacientes sem AGHU |
 
 O provedor de pacientes é selecionado por `PACIENTE_PROVIDER_TYPE` em `src/config.py`. Não confundir as informações externas do AGHU com as entidades locais do SAP. A API pode expor dados de pacientes sem criar uma tabela local de pacientes.
@@ -22,7 +23,7 @@ O esquema canônico das tabelas locais é definido em `src/models/authorized_use
 
 ## Migrações
 
-Cadeia linear existente: `df72b10ec0f3` → `8a2efbe37bb6` → `4b1f20261103` → `c7a1d2e3f405` (triggers de imutabilidade de `audit_logs`) → `d3b8f1a2c6e7` (`refresh_tokens.deleted_at`) → `e5a9c4d7b210` (`authorized_users.nome`). O Alembic deve reportar **um head**. A revisão intermediária foi ajustada para não apagar `refresh_tokens` durante instalações novas. Migrações que já tenham rodado no ambiente de equipe exigem revisão e backup antes de reaplicar ou alterar a versão registrada.
+Cadeia linear existente: `df72b10ec0f3` → `8a2efbe37bb6` → `4b1f20261103` → `c7a1d2e3f405` (triggers de imutabilidade de `audit_logs`) → `d3b8f1a2c6e7` (`refresh_tokens.deleted_at`) → `e5a9c4d7b210` (`authorized_users.nome`) → `20261105_casos_fluxo` (tabelas das solicitações e fluxo por tipo) → `20261110_refino_aghu` → `20261111_mvp_fases` (retirada, urgência, formulários por fase, fluxos de IHQ e Revisão de Lâmina) → `20261118_renomear_solicitacao` (nomes de "caso" para "solicitação", sem perda de dados). O Alembic deve reportar **um head**. A revisão intermediária foi ajustada para não apagar `refresh_tokens` durante instalações novas. Migrações que já tenham rodado no ambiente de equipe exigem revisão e backup antes de reaplicar ou alterar a versão registrada.
 
 Com banco de teste e backup disponível:
 
@@ -34,7 +35,7 @@ uv run alembic upgrade head
 
 O banco AGHU não é migrado pelo Alembic local. Em produção, o usuário de conexão do AGHU deve ter somente permissão `SELECT`.
 
-## Solicitação de exame (módulo do Membro 4)
+## Solicitação de exame
 
 - **A solicitação de exame vem do AGHU.** Cada solicitação recebida no AGHU é aberta uma vez no SAP; não existe solicitação no SAP sem a do AGHU (RN-02).
 - **Congelação (CO) e Histopatológico (HP)** chegam como duas solicitações no AGHU e são acompanhadas separadamente.
@@ -42,6 +43,10 @@ O banco AGHU não é migrado pelo Alembic local. Em produção, o usuário de co
 - Tabelas: `solicitacoes_exame`, `solicitacao_amostras`, `solicitacao_movimentacoes` (append-only), `solicitacao_fases` (formulário de cada fase), `solicitacao_inconformidades`, `fluxo_transicoes` (fluxo por tipo de exame, semeado pela migração) e `solicitacao_sequencias` (numeração por sigla e ano). As tabelas filhas se ligam pela coluna `solicitacao_id`. Modelos em `src/models/solicitacao.py`; criadas em `20261105_casos_fluxo` e renomeadas de "caso" para "solicitação" em `20261118_renomear_solicitacao` (sem perda de dados).
 - `solicitacoes_exame.paciente_nome` e `solicitacoes_exame.prontuario_aghu` ficam cifrados com AES-256. A busca por prontuário usa `solicitacoes_exame.prontuario_indice` (HMAC-SHA256 do prontuário só com dígitos). `solicitacoes_exame.paciente_codigo_aghu` é a chave técnica de vínculo com o AGHU e fica em claro.
 - A solicitação é localizada pelo número do AGHU (código do exame), pelo identificador interno ou pelo prontuário.
+- `solicitacoes_exame` guarda também a etapa atual (`etapa_atual`), o status derivado dela (`EM_ANDAMENTO` ou `ARQUIVADO`), `urgente` (Congelação é sempre urgente) e a retirada da Recepção (`retirado_em`, `retirado_por`). A solicitação só entra no SAP depois de recebida no AGHU.
+- `solicitacao_fases`: um registro por solicitação e fase (`UNIQUE(solicitacao_id, etapa)`), com os campos do formulário em JSON (`dados`), `situacao` (`RASCUNHO` ao salvar, `CONCLUIDA` ao concluir), quem salvou e quando, quem concluiu e quando. Concluída, a fase pode ser editada por 6 dias.
+- `solicitacao_movimentacoes` (append-only) registra cada passagem: `ABERTURA`, `RETIRADA`, `DESFAZER_RETIRADA`, `CONCLUSAO`, `ENCAMINHAMENTO`, `RETORNO` e `SINCRONIZACAO_AGHU`, com etapa de origem, destino, motivo, usuário e data.
+- `solicitacao_inconformidades` existe no esquema, mas o MVP ainda não tem onde registrar inconformidades; a devolução da solicitação é feita no AGHU (RN-06).
 - **Trilha de auditoria:** eventos novos usam o recurso `solicitacao:<id>` e os códigos `ABRIR_SOLICITACAO`, `ENCAMINHAR_SOLICITACAO` e `RETORNAR_SOLICITACAO`. Registros anteriores à renomeação continuam como `caso:<id>` e `ABRIR_CASO` etc. (a trilha é imutável); o histórico de uma solicitação mostra os dois.
 
 ## Regras de Integridade
@@ -72,7 +77,7 @@ Formato do registro como entra no helper `registrar_auditoria` e como sai da API
 ```
 
 ### [SCHEMA] Esquema JSON - Paciente
-> **Pendente:** o módulo de pacientes (PR #1) aceita CPF opcional e com máscara, o que diverge deste esquema (CPF obrigatório, 11 dígitos). A view do AGHU (`vw_solicitacao`) não traz CPF nem CNS, e sim o prontuário. Segundo o setor, o caso é acessado pelo número da solicitação do AGHU (o "código do exame", coluna "AGHU" da planilha) ou pelo prontuário do paciente. A obrigatoriedade do CPF segue em aberto.
+> **Pendente:** o módulo de pacientes (PR #1) aceita CPF opcional e com máscara, o que diverge deste esquema (CPF obrigatório, 11 dígitos). A view do AGHU (`vw_solicitacao`) não traz CPF nem CNS, e sim o prontuário. Segundo o setor, a solicitação é localizada pelo número da solicitação do AGHU (o "código do exame", coluna "AGHU" da planilha) ou pelo prontuário do paciente. A obrigatoriedade do CPF segue em aberto.
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",

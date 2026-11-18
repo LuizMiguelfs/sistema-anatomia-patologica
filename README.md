@@ -1,11 +1,44 @@
 # Gestão Digital da Anatomia Patológica — SAP
 
-> **Refino da avaliação (2026-11-10):** a implementação atual torna o cadastro de
-> pacientes somente leitura, deriva o exame do AGHU e permite conferência auditada
-> dos dados da solicitação. As definições dos indicadores e as pendências clínicas estão
-> em [`docs/REFINO_POS_AVALIACAO.md`](docs/REFINO_POS_AVALIACAO.md).
-> A abertura de solicitações reais exige validação do campo de tipo de exame pela equipe DBA.
->
+Sistema de acompanhamento das **solicitações de exame** do Serviço de Anatomia Patológica do
+HC-UFPE, da Recepção ao Arquivo. A especificação completa (problema, regras de negócio,
+requisitos e casos de uso) está em [`docs/especificacao/`](docs/especificacao/README.md).
+
+## O que o SAP faz hoje (v1.2.0, MVP)
+
+- **Solicitações de Exames:** as solicitações recebidas no AGHU aparecem em *Não retirados*
+  (urgentes no topo) e, depois que a Recepção marca a retirada, em *Retirados*. Busca por
+  prontuário, código AGHU ou código interno (`HP-0001/26`).
+- **Fases do setor:** uma fila e um formulário por fase (Macroscopia, Congelação, Processamento
+  Técnico, IHQ, Microscopia, Revisão de Lâmina). *Salvar* guarda um rascunho; *Concluído* exige
+  os campos obrigatórios e envia a solicitação para a próxima fase. Todos os perfis veem tudo;
+  só o perfil responsável edita. Os campos ainda são provisórios.
+- **Histórico:** cada solicitação mostra o que foi feito, por quem e quando (trilha de auditoria).
+- **Início:** retrato das filas (não retiradas, pendentes e urgentes por fase, aguardando o
+  patologista) e indicadores que contam só o que o fluxo registra.
+- **Dados do AGHU são somente leitura** (RN-01): o SAP nunca cria nem edita uma solicitação do AGHU.
+
+Ainda não estão prontos: formulários reais de cada fase, aba Arquivados, retornos entre etapas,
+envios externos e a leitura do AGHU real. As decisões técnicas sobre o AGHU estão em
+[`docs/REFINO_POS_AVALIACAO.md`](docs/REFINO_POS_AVALIACAO.md).
+
+### Rodar a demonstração (dados fictícios)
+
+No `.env` (copiado de `.env.example`), em desenvolvimento: `ENV=development`,
+`AGHU_PROVIDER_TYPE=SIMULADO`, `AUTH_ALLOW_MOCK=true`, uma senha em `MOCK_AUTH_PASSWORD` e
+`MOCK_AUTH_USERS=demo.recepcao,demo.residente,demo.patologista,demo.laboratorio,demo.chefia`.
+
+```bash
+uv run alembic upgrade head
+uv run python -m scripts.seed_mvp --confirm   # recusa banco que já tem solicitações
+cd frontend && npm run build && cd ..
+uv run uvicorn src.main:app --port 8000
+```
+
+Entre em `http://localhost:8000` com um dos usuários `demo.*` (um por perfil) e a senha do
+`MOCK_AUTH_PASSWORD`. Nunca use dados reais de pacientes fora do ambiente do hospital.
+
+---
 
 > **Arquitetura Web Full-Stack de Referência (Python / FastAPI + Vue 3 / Vite)**  
 > *Padrão Oficial de Desenvolvimento de Sistemas para o Hospital das Clínicas da UFPE (HC-UFPE / EBSERH).*
@@ -73,7 +106,7 @@ Framework-SETISD-HC-UFPE/
 │   │   ├── router/       # Roteamento e guards de autenticação
 │   │   ├── services/     # Cliente HTTP Axios com interceptadores de token
 │   │   ├── stores/       # Gerenciamento de estado Pinia (auth, ui)
-│   │   └── views/        # Telas da aplicação (Home, Login, Pacientes, Admin)
+│   │   └── views/        # Telas (Início, Solicitações, Fase, Configurações, Login)
 │   └── package.json      # Dependências do frontend (Node.js)
 ├── src/                  # Backend em Python FastAPI
 │   ├── auth/             # Módulos de autenticação AD, JWT e Mock
@@ -112,8 +145,11 @@ Executa o Backend (`http://localhost:8000`) e o Frontend Vite (`http://localhost
 
 ### 3. Rodar a Suíte de Testes Automatizados
 ```bash
-uv run pytest
+uv run pytest -q
+cd frontend && npm test && npm run build
+uv run python audit_framework.py .
 ```
+O CI (`.github/workflows/ci.yml`) roda essas três checagens em cada PR e em cada push na `main`.
 
 ---
 
