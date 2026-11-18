@@ -368,6 +368,9 @@ onMounted(() => {
                 )
               }}
             </p>
+            <p class="mt-2 text-xs text-gray-500">
+              Encaminhadas (IHQ, recorte, revisão, Rede Externa) que ainda não voltaram à etapa de origem.
+            </p>
           </Card>
         </div>
       </section>
@@ -461,7 +464,7 @@ onMounted(() => {
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Card>
             <p class="text-sm text-gray-500">
-              Inconsistências
+              Inconformidades abertas
             </p>
             <p class="mt-3 text-2xl font-bold text-gray-800">
               {{

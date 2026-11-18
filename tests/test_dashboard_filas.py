@@ -39,6 +39,7 @@ def _h(username: str, role: str) -> Dict[str, str]:
 
 
 REC, RES, PAT = _h("ana.recepcao", "RECEPCAO"), _h("caio.res", "RESIDENTE"), _h("dora.pat", "PRECEPTORIA")
+LAB = _h("bia.lab", "LABORATORIO")
 
 
 @pytest.fixture
@@ -52,7 +53,8 @@ def api(tmp_path, monkeypatch):
     try:
         with TestClient(app) as client:
             with sqlite3.connect(db) as conn:
-                for user, role in (("ana.recepcao", "RECEPCAO"), ("caio.res", "RESIDENTE"), ("dora.pat", "PRECEPTORIA")):
+                for user, role in (("ana.recepcao", "RECEPCAO"), ("caio.res", "RESIDENTE"), ("dora.pat", "PRECEPTORIA"),
+                                   ("bia.lab", "LABORATORIO")):
                     conn.execute("INSERT INTO authorized_users (username, role, active, created_at) VALUES (?, ?, 1, ?)",
                                  (user, role, datetime.now(timezone.utc).isoformat()))
             ids = {}
@@ -132,3 +134,41 @@ def test_retrato_nao_traz_dados_de_paciente(api):
     corpo = client.get("/api/dashboard/resumo", headers=REC).text
     assert NOME not in corpo and "9101" not in corpo
     assert _filas(client)["nao_retiradas"] == 5
+
+
+def test_indicadores_contam_so_o_que_o_fluxo_registra(api):
+    """T5.2: "aguardando complementação" = encaminhadas que ainda não voltaram; inconformidade
+    (que o SAP ainda não registra) fica "Não medido" em vez de zero."""
+    client, ids = api
+    sid = ids["101"]  # HP
+    assert client.post(f"/api/solicitacoes/{sid}/retirar", headers=REC).status_code == 200
+    macro = {"descricao_macroscopica": "x", "qtd_fragmentos": 1, "qtd_cassetes": 1, "laudo_macroscopico": "x"}
+    assert client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{sid}/concluir", json={"dados": macro}, headers=RES).status_code == 200
+    proc = {"inicio": "Histotécnico", "qtd_blocos": 1, "qtd_laminas": 2}
+    assert client.post(f"/api/fases/PROCESSAMENTO/solicitacoes/{sid}/concluir", json={"dados": proc}, headers=LAB).status_code == 200
+
+    def resumo():
+        r = client.get("/api/dashboard/resumo", headers=PAT)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    assert resumo()["operacional"]["aguardando_complementacao"] == 0
+    # Na Microscopia, o patologista pede IHQ: a solicitação fica aguardando o processamento complementar.
+    r = client.post(f"/api/solicitacoes/{sid}/encaminhar", json={"destino": "IHQ", "motivo": "Painel de IHQ"}, headers=PAT)
+    assert r.status_code == 200, r.text
+    dados = resumo()
+    assert dados["operacional"]["aguardando_complementacao"] == 1
+    assert {f["etapa"]: f for f in dados["filas"]["fases"]}["IHQ"]["pendentes"] == 1
+
+    # O laboratório conclui a IHQ: a solicitação volta à Microscopia e deixa de aguardar.
+    ihq = {"marcadores": "CK7", "qtd_laminas": 1, "resultado": "Resultado fictício"}
+    r = client.post(f"/api/fases/IHQ/solicitacoes/{sid}/concluir", json={"dados": ihq}, headers=LAB)
+    assert r.status_code == 200, r.text
+    dados = resumo()
+    assert dados["operacional"]["aguardando_complementacao"] == 0
+    assert {f["etapa"]: f for f in dados["filas"]["fases"]}["MICROSCOPIA"]["pendentes"] == 1
+
+    # O que o fluxo não registra continua "Não medido" (null), nunca zero.
+    gerencial = dados["gerencial"]
+    assert all(valor is None for valor in gerencial.values()), gerencial
+    assert "Não mensurado" in dados["criterios"]["total_inconsistencias"]
