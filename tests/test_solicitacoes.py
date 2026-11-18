@@ -8,13 +8,16 @@ from typing import Any, Dict, List, Optional
 import pytest
 from fastapi import HTTPException
 
+from src.controllers import fase_controller, retirada_controller
 from src.controllers import solicitacao_controller as ctrl
+from src.helpers.formularios_fase import campos_da_fase
 
 pytestmark = pytest.mark.asyncio
 
 RECEPCAO = {"username": "ana.recepcao", "role": "RECEPCAO"}
 LAB = {"username": "bia.lab", "role": "LABORATORIO"}
 RESIDENTE = {"username": "caio.res", "role": "RESIDENTE"}
+PATOLOGISTA = {"username": "dora.pat", "role": "PRECEPTORIA"}
 
 HP = {
     ("INICIO", "AVANCO"): ["RECEPCAO"], ("RECEPCAO", "AVANCO"): ["MACROSCOPIA"],
@@ -49,6 +52,7 @@ class FakeProvider:
     """Imita SolicitacaoSqliteProvider em memória (SolicitacaoProviderInterface)."""
 
     def __init__(self):
+        self.fases: Dict = {}
         self.session = object()
         self.solicitacoes: Dict[int, Dict[str, Any]] = {}
         self.amostras: List[Dict] = []
@@ -114,7 +118,14 @@ class FakeProvider:
         self.solicitacoes[solicitacao_id].update(etapa_atual="RECEPCAO", status=status, retirado_em=None, retirado_por=None)
 
     async def buscar_fase(self, solicitacao_id, etapa):
-        return None
+        return self.fases.get((solicitacao_id, etapa))
+
+    async def salvar_fase(self, d):
+        self.fases[(d["solicitacao_id"], d["etapa"])] = {
+            "solicitacao_id": d["solicitacao_id"], "etapa": d["etapa"], "dados": d["dados"], "situacao": d["situacao"],
+            "salvo_por": d["usuario"], "salvo_em": d["agora"],
+            "concluido_por": d.get("concluido_por"), "concluido_em": d.get("concluido_em"),
+        }
 
 
 def _aghu_ok():
@@ -186,44 +197,71 @@ async def test_abrir_solicitacao_validacoes_e_perfil():
     assert await _status(ctrl.abrir_solicitacao("123", RECEPCAO, None, p, FakeAghu({**_aghu_ok().cabecalho, "tipo_exame": "CO"}, _aghu_ok().amostras))) == 409  # fluxo não configurado
 
 
-# --- UC017 ------------------------------------------------------------------
-async def test_concluir_etapa_avanca_conforme_fluxo_e_respeita_alcada(auditoria):
+# --- UC017: concluir etapa (só pela retirada ou pelo formulário da fase) ----
+def _formulario_completo(etapa: str, tipo: str = "HP") -> Dict[str, Any]:
+    """Todos os campos da fase com valores fictícios válidos."""
+    def valor(c):
+        return {"numero": 1, "sim_nao": True, "opcao": (c.get("opcoes") or ["x"])[0]}.get(c["tipo"], "Texto fictício")
+    return {c["nome"]: valor(c) for c in campos_da_fase(etapa, tipo)}
+
+
+async def _concluir(p, etapa, perfil, tipo="HP", sid=1):
+    return await fase_controller.concluir_fase(etapa, sid, _formulario_completo(etapa, tipo), perfil, None, p)
+
+
+async def test_retirada_conclui_a_recepcao_e_respeita_alcada(auditoria):
     p = FakeProvider()
     await _abrir(p)
-    assert await _status(ctrl.concluir_etapa(1, LAB, None, p)) == 403  # Recepção é alçada da Recepção
-    solicitacao = await ctrl.concluir_etapa(1, RECEPCAO, None, p)
-    assert solicitacao["etapa_atual"] == "MACROSCOPIA" and solicitacao["retirado_em"]
-    assert p.movs[-1]["tipo"] == "RETIRADA"  # concluir a Recepção = material retirado
+    assert await _status(retirada_controller.marcar_retirado(1, LAB, None, p)) == 403  # Recepção é alçada da Recepção
+    await retirada_controller.marcar_retirado(1, RECEPCAO, None, p)
+    assert p.solicitacoes[1]["etapa_atual"] == "MACROSCOPIA" and p.solicitacoes[1]["retirado_em"]
+    assert p.movs[-1]["tipo"] == "RETIRADA"
     assert auditoria[-1]["dados_anteriores"]["etapa_atual"] == "RECEPCAO"
 
 
-async def test_concluir_etapa_bloqueada_com_pendencia_aberta():
+async def test_concluir_fase_bloqueada_com_pendencia_aberta():
     p = FakeProvider()
     await _abrir(p)
+    await retirada_controller.marcar_retirado(1, RECEPCAO, None, p)
     p.pendencias[1] = 1
-    assert await _status(ctrl.concluir_etapa(1, RECEPCAO, None, p)) == 409
-    assert p.solicitacoes[1]["etapa_atual"] == "RECEPCAO"
+    assert await _status(_concluir(p, "MACROSCOPIA", RESIDENTE)) == 409
+    assert p.solicitacoes[1]["etapa_atual"] == "MACROSCOPIA"
 
 
 async def test_status_derivado_arquivado_e_nao_avanca_depois():
     p = FakeProvider()
     await _abrir(p)
-    await ctrl.concluir_etapa(1, RECEPCAO, None, p)
-    assert await _status(ctrl.concluir_etapa(1, LAB, None, p)) == 403  # Macroscopia é dos Residentes
-    await ctrl.concluir_etapa(1, RESIDENTE, None, p)
-    await ctrl.concluir_etapa(1, LAB, None, p)  # PROCESSAMENTO -> MICROSCOPIA
-    solicitacao = await ctrl.concluir_etapa(1, RESIDENTE, None, p)
-    assert solicitacao["etapa_atual"] == "ARQUIVO" and solicitacao["status"] == "ARQUIVADO"
-    assert await _status(ctrl.concluir_etapa(1, RESIDENTE, None, p)) == 409
+    await retirada_controller.marcar_retirado(1, RECEPCAO, None, p)
+    assert await _status(_concluir(p, "MACROSCOPIA", LAB)) == 403  # Macroscopia é dos Residentes
+    await _concluir(p, "MACROSCOPIA", RESIDENTE)
+    await _concluir(p, "PROCESSAMENTO", LAB)  # PROCESSAMENTO -> MICROSCOPIA
+    await _concluir(p, "MICROSCOPIA", PATOLOGISTA)
+    assert p.solicitacoes[1]["etapa_atual"] == "ARQUIVO" and p.solicitacoes[1]["status"] == "ARQUIVADO"
+    assert await _status(_concluir(p, "MICROSCOPIA", PATOLOGISTA)) == 409
+
+
+async def test_detalhe_mostra_quem_pode_concluir_a_etapa_atual():
+    """pode_concluir segue a mesma regra das rotas que avançam: retirada e formulário (T4.2)."""
+    p = FakeProvider()
+    await _abrir(p)
+    assert (await ctrl.obter_solicitacao(1, RECEPCAO, p))["acoes"]["pode_concluir"] is True
+    assert (await ctrl.obter_solicitacao(1, RESIDENTE, p))["acoes"]["pode_concluir"] is False
+    await retirada_controller.marcar_retirado(1, RECEPCAO, None, p)
+    await _concluir(p, "MACROSCOPIA", RESIDENTE)
+    await _concluir(p, "PROCESSAMENTO", LAB)
+    # Microscopia: o residente salva o pré-laudo, mas só o patologista conclui.
+    assert (await ctrl.obter_solicitacao(1, RESIDENTE, p))["acoes"]["pode_concluir"] is False
+    assert (await ctrl.obter_solicitacao(1, PATOLOGISTA, p))["acoes"]["pode_concluir"] is True
+    assert not hasattr(ctrl, "concluir_etapa")  # a rota antiga, que avançava sem formulário, saiu
 
 
 # --- UC012 ------------------------------------------------------------------
 async def _levar_a_microscopia(p, tipo="HP"):
     await _abrir(p, tipo)
-    await ctrl.concluir_etapa(1, RECEPCAO, None, p)
+    await retirada_controller.marcar_retirado(1, RECEPCAO, None, p)
     if tipo == "HP":
-        await ctrl.concluir_etapa(1, RESIDENTE, None, p)  # MACROSCOPIA (Residentes)
-    await ctrl.concluir_etapa(1, LAB, None, p)  # PROCESSAMENTO
+        await _concluir(p, "MACROSCOPIA", RESIDENTE, tipo)
+    await _concluir(p, "PROCESSAMENTO", LAB, tipo)
 
 
 async def test_encaminhar_exige_motivo_e_destino_valido():
@@ -247,7 +285,7 @@ async def test_encaminhar_e_retornar_preserva_historico(auditoria):
     await _levar_a_microscopia(p)
     solicitacao = await ctrl.encaminhar_solicitacao(1, "RECEPCAO", "erro de cadastro", RESIDENTE, None, p)
     assert solicitacao["etapa_atual"] == "RECEPCAO" and solicitacao["acoes"]["pode_retornar"] is False  # visão do residente
-    assert await _status(ctrl.concluir_etapa(1, RECEPCAO, None, p)) == 409  # em desvio: só retornar
+    assert await _status(retirada_controller.marcar_retirado(1, RECEPCAO, None, p)) == 409  # em desvio: só retornar
     assert await _status(ctrl.retornar_solicitacao(1, "", RECEPCAO, None, p)) == 422
     p.pendencias[1] = 1
     assert await _status(ctrl.retornar_solicitacao(1, "ajustado", RECEPCAO, None, p)) == 409
@@ -275,7 +313,7 @@ async def test_auditoria_entra_na_mesma_transacao_da_solicitacao(auditoria):
     """O helper não pode fazer commit próprio: solicitação, movimentação e auditoria vão juntos."""
     provider = FakeProvider()
     solicitacao = await _abrir(provider)
-    await ctrl.concluir_etapa(solicitacao["id"], RECEPCAO, "10.0.0.1", provider)
+    await retirada_controller.marcar_retirado(solicitacao["id"], RECEPCAO, "10.0.0.1", provider)
     assert auditoria and all(r.get("commit") is False for r in auditoria)
     assert {r["recurso"] for r in auditoria} == {f"solicitacao:{solicitacao['id']}"}
     assert {r["categoria"] for r in auditoria} == {"NEGOCIO_CLINICO"}

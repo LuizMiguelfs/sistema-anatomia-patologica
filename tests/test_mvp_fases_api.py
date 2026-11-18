@@ -274,3 +274,15 @@ def test_recurso_legado():
     assert recurso_legado("paciente:12") is None
     assert recurso_legado("solicitacao:") is None
 
+
+def test_concluir_sem_obrigatorios_nao_avanca(api):
+    """T4.2 / RN-03: sem os obrigatórios, a fase não conclui e a solicitação fica onde está."""
+    client, _, ids = api
+    sid = ids["101"]
+    assert client.post(f"/api/solicitacoes/{sid}/retirar", headers=REC).status_code == 200
+    r = client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{sid}/concluir",
+                    json={"dados": {"descricao_macroscopica": "Só a descrição"}}, headers=RES)
+    assert r.status_code == 422 and "Preencha os campos obrigatórios" in r.json()["detail"]
+    detalhe = client.get(f"/api/solicitacoes/{sid}", headers=RES).json()
+    assert detalhe["etapa_atual"] == "MACROSCOPIA"
+    assert client.post(f"/api/solicitacoes/{sid}/concluir-etapa", headers=RES).status_code in (404, 405)

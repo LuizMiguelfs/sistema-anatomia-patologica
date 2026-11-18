@@ -222,17 +222,6 @@ async def historico(
     return await solicitacao_controller.historico_solicitacao(solicitacao_id, provider)
 
 
-@router.post("/{solicitacao_id}/concluir-etapa", response_model=SolicitacaoDetalhe)
-async def concluir_etapa(
-    solicitacao_id: int,
-    request: Request,
-    usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
-    provider: SolicitacaoProviderInterface = Depends(get_solicitacao_provider),
-) -> Dict[str, Any]:
-    """UC017 / RF019: conclui a etapa atual com validação."""
-    return await solicitacao_controller.concluir_etapa(solicitacao_id, usuario, _ip(request), provider)
-
-
 @router.post("/{solicitacao_id}/encaminhar", response_model=SolicitacaoDetalhe)
 async def encaminhar(
     solicitacao_id: int,

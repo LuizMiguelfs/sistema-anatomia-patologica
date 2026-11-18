@@ -76,9 +76,11 @@ def test_fluxo_completo_pela_api(api):
     lista = client.get("/api/solicitacoes/busca", params={"solicitacao": "123"}, headers=rec).json()
     assert lista["total"] == 1 and lista["items"][0]["identificador_interno"] == "HP-0001/26"
 
-    r = client.post(f"/api/solicitacoes/{solicitacao['id']}/concluir-etapa", headers=rec)
+    # A rota antiga que avançava a etapa sem formulário não existe mais (T4.2).
+    assert client.post(f"/api/solicitacoes/{solicitacao['id']}/concluir-etapa", headers=rec).status_code in (404, 405)  # 405: só a rota GET do frontend casa
+    r = client.post(f"/api/solicitacoes/{solicitacao['id']}/retirar", headers=rec)
     assert r.status_code == 200 and r.json()["etapa_atual"] == "MACROSCOPIA"
-    assert client.post(f"/api/solicitacoes/{solicitacao['id']}/concluir-etapa", headers=rec).status_code == 403  # alçada
+    assert client.post(f"/api/solicitacoes/{solicitacao['id']}/retirar", headers=rec).status_code == 409  # já retirada
 
     hist = client.get(f"/api/solicitacoes/{solicitacao['id']}/historico", headers=_h("bia.lab", "LABORATORIO")).json()
     assert [m["tipo"] for m in hist] == ["ABERTURA", "RETIRADA"]
@@ -191,3 +193,30 @@ def test_tipo_ausente_bloqueia_abertura_sem_registro(api):
     assert r.status_code == 409
     assert client.get("/api/solicitacoes/busca", headers=rec).json()["total"] == 0
 
+
+def test_so_retirada_e_formulario_avancam_a_etapa():
+    """T4.2 / RN-03: inventário das rotas que gravam algo em solicitações e fases.
+
+    Avançar a etapa só acontece por `retirar` (Recepção) e pelo `concluir` do formulário,
+    que exige os obrigatórios. Uma rota nova que mude a solicitação tem de entrar nesta lista
+    de propósito, depois de conferir que ela não avança fase sem formulário.
+    """
+    from fastapi.routing import APIRoute
+    from src.main import app
+
+    escrita = {
+        (metodo, rota.path)
+        for rota in app.routes if isinstance(rota, APIRoute)
+        for metodo in rota.methods if metodo in {"POST", "PUT", "PATCH", "DELETE"}
+        and rota.path.startswith(("/api/solicitacoes", "/api/fases"))
+    }
+    assert escrita == {
+        ("POST", "/api/solicitacoes"),  # abre a solicitação do AGHU (fica na Recepção)
+        ("POST", "/api/solicitacoes/{solicitacao_id}/retirar"),  # conclui a Recepção
+        ("POST", "/api/solicitacoes/{solicitacao_id}/desfazer-retirada"),
+        ("POST", "/api/solicitacoes/{solicitacao_id}/encaminhar"),  # desvio com motivo; volta por "retornar"
+        ("POST", "/api/solicitacoes/{solicitacao_id}/retornar"),
+        ("POST", "/api/solicitacoes/{solicitacao_id}/sincronizar-aghu"),  # só dados cadastrais
+        ("PUT", "/api/fases/{etapa}/solicitacoes/{solicitacao_id}"),  # rascunho, não avança
+        ("POST", "/api/fases/{etapa}/solicitacoes/{solicitacao_id}/concluir"),  # exige obrigatórios
+    }
