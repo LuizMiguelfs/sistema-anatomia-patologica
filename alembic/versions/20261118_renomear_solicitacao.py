@@ -49,9 +49,29 @@ def _renomear_indices(de_para: list) -> None:
             op.create_index(novo, tabela, colunas)
 
 
+def _descartar_tabelas_novas_vazias(existentes: set) -> None:
+    """Em desenvolvimento, o sistema cria as tabelas que faltam ao subir (create_all). Quem subiu
+    o código novo antes de migrar fica com as tabelas novas vazias ao lado das antigas: essas são
+    descartadas para dar lugar às antigas. Se a tabela nova tiver dados, nada é apagado e a
+    migração para, para a pessoa decidir o que fazer."""
+    bind = op.get_bind()
+    duplicadas = [(antigo, novo) for antigo, novo in TABELAS if antigo in existentes and novo in existentes]
+    com_dados = [novo for _, novo in duplicadas if bind.execute(sa.text(f'SELECT COUNT(*) FROM "{novo}"')).scalar()]
+    if com_dados:
+        raise RuntimeError(
+            "As tabelas " + ", ".join(com_dados) + " já existem e têm dados, junto com as tabelas antigas de 'caso'. "
+            "Nada foi alterado. Confira qual delas tem os dados certos antes de migrar."
+        )
+    # Filhas antes da principal, por causa das chaves estrangeiras.
+    for _, novo in reversed(duplicadas):
+        op.drop_table(novo)
+        existentes.discard(novo)
+
+
 def upgrade() -> None:
     """Renomeia tabelas, a coluna caso_id e os índices; os dados ficam como estão."""
     existentes = set(sa.inspect(op.get_bind()).get_table_names())
+    _descartar_tabelas_novas_vazias(existentes)
     for antigo, novo in TABELAS:
         if antigo in existentes:
             op.rename_table(antigo, novo)  # o SQLite atualiza as chaves estrangeiras que apontam para ela
