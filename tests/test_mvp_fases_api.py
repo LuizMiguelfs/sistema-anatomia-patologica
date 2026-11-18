@@ -217,3 +217,31 @@ def test_definicoes_dos_formularios(api):
     assert [f["etapa"] for f in fases] == ["MACROSCOPIA", "CONGELACAO", "PROCESSAMENTO", "IHQ", "MICROSCOPIA", "REVISAO"]
     assert fases[0]["dias_edicao_apos_conclusao"] == 6
     assert client.get("/api/fases").status_code == 401  # Default-Private
+
+
+def test_historico_da_solicitacao_para_todos_os_perfis(api):
+    """T2.1: a linha do tempo (trilha NEGOCIO_CLINICO) mostra entrada, retirada, rascunho e
+    conclusão, para qualquer perfil, sem IP de origem."""
+    client, _, ids = api
+    caso = ids["101"]
+    assert client.post(f"/api/solicitacoes/{caso}/retirar", headers=REC).status_code == 200
+    rascunho = {"dados": {"descricao_macroscopica": "Fragmento fictício"}}
+    assert client.put(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}", json=rascunho, headers=RES).status_code == 200
+    form = client.get(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}", headers=RES).json()
+    completo = {c["nome"]: (1 if c["tipo"] == "numero" else True if c["tipo"] == "sim_nao"
+                            else (c.get("opcoes") or ["x"])[0] if c["tipo"] == "opcao" else "Texto fictício")
+                for c in form["campos"]}
+    r = client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}/concluir", json={"dados": completo}, headers=RES)
+    assert r.status_code == 200, r.text
+
+    for cabecalho in (REC, LAB, RES, PAT, CHE):
+        h = client.get("/api/auditoria/historico", params={"recurso": f"caso:{caso}"}, headers=cabecalho)
+        assert h.status_code == 200, h.text
+        itens = h.json()["itens"]
+        # A API devolve do mais recente para o mais antigo.
+        assert [i["acao"] for i in reversed(itens)] == [
+            "ABRIR_CASO", "MARCAR_RETIRADO", "SALVAR_MACROSCOPIA", "CONCLUIR_MACROSCOPIA",
+        ]
+        assert [i["usuario"] for i in reversed(itens)] == ["ana.recepcao", "ana.recepcao", "caio.res", "caio.res"]
+        assert all("ip_origem" not in i for i in itens)
+    assert client.get("/api/auditoria/historico", params={"recurso": f"caso:{caso}"}).status_code == 401

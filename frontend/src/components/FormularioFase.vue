@@ -6,6 +6,7 @@
   - Concluído: confere os obrigatórios (mostra os que faltam), pede confirmação e envia a
     solicitação para a próxima fase.
   - Quem não é o perfil responsável vê tudo em modo somente leitura.
+  - Embaixo, a linha do tempo da solicitação (LinhaDoTempo.vue).
   Os campos vêm do backend (src/helpers/formularios_fase.py).
 -->
 <template>
@@ -109,6 +110,9 @@
         </div>
       </div>
       <p class="text-xs text-gray-500">* Obrigatório para concluir. Formulário provisório: os campos finais serão definidos com o setor.</p>
+
+      <!-- Quem fez o quê e quando (todos os perfis veem) -->
+      <LinhaDoTempo v-if="casoId" :solicitacao-id="casoId" :versao="versaoHistorico" />
     </div>
 
     <template #footer>
@@ -139,6 +143,7 @@ import { computed, ref, watch } from 'vue';
 import type { PropType } from 'vue';
 import Button from './Button.vue';
 import Modal from './Modal.vue';
+import LinhaDoTempo from './LinhaDoTempo.vue';
 import type { FormularioFase, ValorCampo } from '../services/fases';
 import {
   camposFaltando, concluirFormulario, dadosParaEnvio, obterFormulario, salvarFormulario,
@@ -162,6 +167,8 @@ const confirmando = ref(false);
 const erro = ref('');
 const aviso = ref('');
 const faltando = ref<string[]>([]);
+/** Muda a cada salvar/concluir para a linha do tempo recarregar. */
+const versaoHistorico = ref(0);
 
 const situacaoTexto = computed(() => {
   const f = form.value;
@@ -227,6 +234,7 @@ async function salvar(): Promise<void> {
   try {
     aplicar(await salvarFormulario(props.etapa, props.casoId, dadosParaEnvio(form.value.campos, dados.value)));
     aviso.value = 'Formulário salvo.';
+    versaoHistorico.value += 1;
     emit('alterado');
   } catch (e) {
     erro.value = mensagemErro(e, 'Não foi possível salvar.');
@@ -252,6 +260,7 @@ async function concluir(): Promise<void> {
     aplicar(await concluirFormulario(props.etapa, props.casoId, dadosParaEnvio(form.value.campos, dados.value)));
     confirmando.value = false;
     aviso.value = 'Fase concluída. A solicitação seguiu para a próxima fase.';
+    versaoHistorico.value += 1;
     emit('alterado');
   } catch (e) {
     confirmando.value = false;
