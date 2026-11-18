@@ -89,6 +89,7 @@ Framework-SETISD-HC-UFPE/
 ├── audit_framework.py    # Auditor de Conformidade Arquitetural
 ├── Dockerfile            # Receita de build multi-estágio (opcional para Podman / Docker)
 ├── compose.yaml          # Orquestração de contêiner para VMs (opcional)
+├── render.yaml           # Demonstração no Render com dados fictícios (opcional)
 ├── pyproject.toml        # Dependências e configurações do projeto Python (uv)
 ├── requirements.txt      # Lista congelada de pacotes Python
 ├── dev.sh                # Script de execução paralela para desenvolvimento
@@ -180,6 +181,11 @@ podman compose up -d --build
 # 2. Verificar os logs da aplicação
 podman compose logs -f
 ```
+
+O contêiner aplica as migrações do banco ao iniciar (`scripts/iniciar.sh`) e escuta na porta de `PORT` (padrão 8000).
+
+### 3. Demonstração no Render (somente dados fictícios)
+O `render.yaml` sobe o SAP no plano gratuito do Render com AGHU simulado, login simulado e a carga de demonstração. No Render: **New > Blueprint**, escolha este repositório e preencha `SAP_DATA_KEY` (32 bytes em base64) e `MOCK_AUTH_PASSWORD`; o `JWT_SECRET` é gerado pelo Render. No plano gratuito o serviço dorme após cerca de 15 minutos sem acesso e o banco recomeça a cada deploy ou reinício. Não use essa configuração com dados reais de pacientes.
 
 A aplicação ficará disponível consolidada em `http://IP-DA-VM:8000/`. Para o passo a passo completo da configuração do arquivo de serviço do Linux (`systemd`), consulte o [Guia de Instalação e Deploy (`docs/SETUP.md`)](./docs/SETUP.md).
 

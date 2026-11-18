@@ -1,0 +1,30 @@
+# Demonstração do SAP no Render (plano gratuito), SÓ com dados fictícios: AGHU simulado e login simulado.
+# Não usar com dados reais de pacientes. No Render: New > Blueprint > este repositório.
+# Plano gratuito: o serviço dorme após ~15 min sem acesso e o banco recomeça a cada deploy ou reinício.
+services:
+  - type: web
+    name: sap-anatomia-patologica
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    branch: main
+    autoDeploy: true
+    envVars:
+      - key: ENV
+        value: development
+      - key: AGHU_PROVIDER_TYPE
+        value: SIMULADO
+      - key: AUTH_ALLOW_MOCK
+        value: "true"
+      - key: MOCK_AUTH_USERS
+        value: demo.recepcao,demo.residente,demo.patologista,demo.laboratorio,demo.chefia
+      - key: CARGA_DEMONSTRACAO
+        value: "true"
+      # Segredos: o Render gera o JWT; os outros dois são preenchidos no painel ao criar o Blueprint.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SAP_DATA_KEY
+        sync: false
+      - key: MOCK_AUTH_PASSWORD
+        sync: false
