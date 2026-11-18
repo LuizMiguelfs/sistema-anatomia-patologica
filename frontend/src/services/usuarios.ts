@@ -27,17 +27,22 @@ export interface UsuarioAD {
 }
 
 /** Perfis do SAP com a descrição usada na tela (00-validacao-negocio, seção 6). */
-export const PERFIS_SAP: ReadonlyArray<{ valor: SapRole; rotulo: string; descricao: string }> = [
-  { valor: 'RECEPCAO', rotulo: 'Recepção', descricao: 'Acompanha as solicitações recebidas e marca quando o material é retirado da recepção.' },
-  { valor: 'LABORATORIO', rotulo: 'Laboratório / Técnicos', descricao: 'Registra o Processamento Técnico e a IHQ.' },
-  { valor: 'RESIDENTE', rotulo: 'Residentes', descricao: 'Registra a Macroscopia e preenche o pré-laudo da Congelação, da Microscopia e da Revisão de Lâmina.' },
-  { valor: 'PRECEPTORIA', rotulo: 'Validação / Preceptoria', descricao: 'Patologistas: revisam o pré-laudo, validam o diagnóstico e concluem Congelação, Microscopia e Revisão de Lâmina.' },
-  { valor: 'CHEFIA', rotulo: 'Técnico Administrativo (Chefia do UACAP)', descricao: 'Acompanha painéis e indicadores, visualiza todas as fases e gerencia os usuários e perfis do SAP.' },
+export const PERFIS_SAP: ReadonlyArray<{ valor: SapRole; rotulo: string; curto: string; descricao: string }> = [
+  { valor: 'RECEPCAO', rotulo: 'Recepção', curto: 'Recepção', descricao: 'Acompanha as solicitações recebidas e marca quando o material é retirado da recepção.' },
+  { valor: 'LABORATORIO', rotulo: 'Laboratório / Técnicos', curto: 'Laboratório', descricao: 'Registra o Processamento Técnico e a IHQ.' },
+  { valor: 'RESIDENTE', rotulo: 'Residentes', curto: 'Residentes', descricao: 'Registra a Macroscopia e preenche o pré-laudo da Congelação, da Microscopia e da Revisão de Lâmina.' },
+  { valor: 'PRECEPTORIA', rotulo: 'Validação / Preceptoria', curto: 'Preceptoria', descricao: 'Patologistas: revisam o pré-laudo, validam o diagnóstico e concluem Congelação, Microscopia e Revisão de Lâmina.' },
+  { valor: 'CHEFIA', rotulo: 'Técnico Administrativo (Chefia do UACAP)', curto: 'Chefia', descricao: 'Acompanha painéis e indicadores, visualiza todas as fases e gerencia os usuários e perfis do SAP.' },
 ];
 
 /** Rótulo legível de um perfil; devolve o próprio valor se for desconhecido. */
 export function rotuloPerfil(perfil: string): string {
   return PERFIS_SAP.find((p) => p.valor === perfil)?.rotulo ?? perfil;
+}
+
+/** Rótulo curto de um perfil, para espaços pequenos (ex.: celular); devolve o próprio valor se for desconhecido. */
+export function rotuloCurtoPerfil(perfil: string): string {
+  return PERFIS_SAP.find((p) => p.valor === perfil)?.curto ?? perfil;
 }
 
 /** Normaliza o login de rede como o backend: sem espaços nas pontas e em minúsculas. */

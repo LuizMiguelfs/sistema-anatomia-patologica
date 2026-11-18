@@ -2,6 +2,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import type { Router } from 'vue-router';
 import api from '../services/api';
+import { rotuloCurtoPerfil, rotuloPerfil } from '../services/usuarios';
 
 export type SapRole = 'RECEPCAO' | 'LABORATORIO' | 'RESIDENTE' | 'PRECEPTORIA' | 'CHEFIA';
 export interface User {
@@ -28,6 +29,12 @@ export const useAuthStore = defineStore('auth', () => {
   const role = computed(() => user.value?.role ?? null);
   const isAdmin = computed(() => user.value?.groups.includes('GLO-SEC-HCPE-SETISD') ?? false);
   const isChefia = computed(() => role.value === 'CHEFIA');
+  /** Perfil com que a pessoa entrou, no rótulo usado em Configurações (ex.: "Residentes"). */
+  const perfilRotulo = computed(() => (role.value ? rotuloPerfil(role.value) : null));
+  /** Versão curta do perfil, para o celular (ex.: "Chefia"). */
+  const perfilRotuloCurto = computed(() => (role.value ? rotuloCurtoPerfil(role.value) : null));
+  /** Nome do AD quando houver; senão, o login. */
+  const nomeExibicao = computed(() => user.value?.displayName?.[0]?.trim() || user.value?.username || null);
   const hasRole = (...roles: SapRole[]) => user.value !== null && roles.includes(user.value.role);
 
   const setToken = (value: string) => { accessToken.value = value; };
@@ -96,7 +103,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    accessToken, user, initialized, isAuthenticated, role, isAdmin, isChefia,
+    accessToken, user, initialized, isAuthenticated, role, isAdmin, isChefia, perfilRotulo, perfilRotuloCurto, nomeExibicao,
     hasRole, setToken, setUser, clearToken, fetchUser, login, logout, initializeAuth,
   };
 });

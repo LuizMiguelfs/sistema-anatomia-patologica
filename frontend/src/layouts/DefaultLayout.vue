@@ -90,11 +90,22 @@
 
     <!-- Content -->
     <div class="flex-1 flex flex-col bg-paper-bg overflow-y-auto h-full">
-      <header class="flex justify-between items-center p-6 bg-white/80 backdrop-blur-md border-b border-gray-300 sticky top-0 z-10">
-        <div>
+      <header class="flex justify-between items-center gap-3 p-6 bg-white/80 backdrop-blur-md border-b border-gray-300 sticky top-0 z-10">
+        <div class="min-w-0">
           <h1 class="text-2xl font-semibold text-paper-text">{{ $route.name }}</h1>
         </div>
-        <div>
+        <div class="flex min-w-0 shrink-0 items-center gap-3">
+          <!-- Com qual perfil a pessoa entrou: visível em todas as telas (T1.2) -->
+          <div v-if="authStore.isAuthenticated" class="min-w-0 text-right leading-tight" :title="`${authStore.nomeExibicao} · Perfil: ${authStore.perfilRotulo ?? 'Não definido'}`">
+            <p class="hidden sm:block text-sm font-medium text-paper-text truncate max-w-56">{{ authStore.nomeExibicao }}</p>
+            <p class="text-xs text-gray-500">
+              <span class="hidden sm:inline">Perfil: </span>
+              <span class="inline-block max-w-32 sm:max-w-56 truncate align-bottom rounded-full bg-paper-primary/15 px-2 py-0.5 font-semibold text-paper-default">
+                <span class="sm:hidden">{{ authStore.perfilRotuloCurto ?? 'Não definido' }}</span>
+                <span class="hidden sm:inline">{{ authStore.perfilRotulo ?? 'Não definido' }}</span>
+              </span>
+            </p>
+          </div>
           <router-link v-if="!authStore.isAuthenticated" to="/login">
             <Button variant="primary">
               <template #icon>
@@ -103,7 +114,7 @@
               Login
             </Button>
           </router-link>
-          <ProfileDropdown v-else />
+          <ProfileDropdown v-else class="shrink-0" />
         </div>
       </header>
       <main class="flex-1">
