@@ -118,18 +118,19 @@ class AuditoriaSqliteProvider(AuditoriaProviderInterface):
         return int(result.scalar_one())
 
     async def listar_historico(
-        self, recurso: str, categoria: str, limite: int = 50, offset: int = 0
+        self, recurso: str, categoria: str, limite: int = 50, offset: int = 0, recurso_legado: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Executa `auditoria/listar_historico.sql`."""
         result = await self.session.execute(
             text(get_sql_query("auditoria/listar_historico.sql")),
-            {"recurso": recurso, "categoria": categoria, "limite": limite, "offset": offset},
+            {"recurso": recurso, "recurso_legado": recurso_legado, "categoria": categoria, "limite": limite, "offset": offset},
         )
         return [self._normalizar(row) for row in result.mappings().all()]
 
-    async def contar_historico(self, recurso: str, categoria: str) -> int:
+    async def contar_historico(self, recurso: str, categoria: str, recurso_legado: Optional[str] = None) -> int:
         """Executa `auditoria/contar_historico.sql`."""
         result = await self.session.execute(
-            text(get_sql_query("auditoria/contar_historico.sql")), {"recurso": recurso, "categoria": categoria}
+            text(get_sql_query("auditoria/contar_historico.sql")),
+            {"recurso": recurso, "recurso_legado": recurso_legado, "categoria": categoria},
         )
         return int(result.scalar_one())

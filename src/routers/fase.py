@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 
 from ..auth.auth import auth_handler
 from ..controllers import fase_controller
-from ..dependencies import get_caso_provider
-from ..providers.interfaces.caso_provider_interface import CasoProviderInterface
+from ..dependencies import get_solicitacao_provider
+from ..providers.interfaces.solicitacao_provider_interface import SolicitacaoProviderInterface
 
 router = APIRouter(
     prefix="/api/fases",
@@ -76,44 +76,44 @@ async def fila(
     busca: Optional[str] = Query(None, max_length=40, description="Prontuário, código AGHU ou código interno"),
     pagina: int = Query(1, ge=1),
     limite: int = Query(50, ge=1, le=100),
-    provider: CasoProviderInterface = Depends(get_caso_provider),
+    provider: SolicitacaoProviderInterface = Depends(get_solicitacao_provider),
 ) -> Dict[str, Any]:
     """Pendentes da fase e concluídas recentes ainda editáveis."""
     return await fase_controller.listar_fila(etapa, {"tipo_exame": tipo_exame, "busca": busca}, pagina, limite, provider)
 
 
-@router.get("/{etapa}/solicitacoes/{caso_id}")
+@router.get("/{etapa}/solicitacoes/{solicitacao_id}")
 async def obter(
     etapa: str,
-    caso_id: int,
+    solicitacao_id: int,
     usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
-    provider: CasoProviderInterface = Depends(get_caso_provider),
+    provider: SolicitacaoProviderInterface = Depends(get_solicitacao_provider),
 ) -> Dict[str, Any]:
     """Formulário da fase para a solicitação, com permissões do perfil."""
-    return await fase_controller.obter_fase(etapa, caso_id, usuario, provider)
+    return await fase_controller.obter_fase(etapa, solicitacao_id, usuario, provider)
 
 
-@router.put("/{etapa}/solicitacoes/{caso_id}")
+@router.put("/{etapa}/solicitacoes/{solicitacao_id}")
 async def salvar(
     etapa: str,
-    caso_id: int,
+    solicitacao_id: int,
     corpo: FormularioIn,
     request: Request,
     usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
-    provider: CasoProviderInterface = Depends(get_caso_provider),
+    provider: SolicitacaoProviderInterface = Depends(get_solicitacao_provider),
 ) -> Dict[str, Any]:
     """Salvar: grava o formulário sem exigir os campos obrigatórios."""
-    return await fase_controller.salvar_fase(etapa, caso_id, corpo.dados, usuario, _ip(request), provider)
+    return await fase_controller.salvar_fase(etapa, solicitacao_id, corpo.dados, usuario, _ip(request), provider)
 
 
-@router.post("/{etapa}/solicitacoes/{caso_id}/concluir")
+@router.post("/{etapa}/solicitacoes/{solicitacao_id}/concluir")
 async def concluir(
     etapa: str,
-    caso_id: int,
+    solicitacao_id: int,
     corpo: FormularioIn,
     request: Request,
     usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
-    provider: CasoProviderInterface = Depends(get_caso_provider),
+    provider: SolicitacaoProviderInterface = Depends(get_solicitacao_provider),
 ) -> Dict[str, Any]:
     """Concluído: exige os obrigatórios e envia a solicitação para a próxima fase."""
-    return await fase_controller.concluir_fase(etapa, caso_id, corpo.dados, usuario, _ip(request), provider)
+    return await fase_controller.concluir_fase(etapa, solicitacao_id, corpo.dados, usuario, _ip(request), provider)

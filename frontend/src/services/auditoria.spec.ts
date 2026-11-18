@@ -8,8 +8,10 @@ import { ACOES_FIXAS, FASES_COM_FORMULARIO, acoesConhecidas, rotuloAcao } from '
 const ACOES_DO_BACKEND = [
   'LOGIN', 'LOGOUT', 'RENOVAR_SESSAO',
   'INCLUIR_USUARIO', 'ALTERAR_PERFIL_USUARIO', 'INATIVAR_USUARIO', 'REATIVAR_USUARIO',
-  'ABRIR_CASO', 'MARCAR_RETIRADO', 'DESFAZER_RETIRADA', 'CONCLUIR_ETAPA', 'ENCAMINHAR_CASO',
-  'RETORNAR_CASO', 'SINCRONIZAR_CADASTRO_AGHU',
+  'ABRIR_SOLICITACAO', 'MARCAR_RETIRADO', 'DESFAZER_RETIRADA', 'CONCLUIR_ETAPA', 'ENCAMINHAR_SOLICITACAO',
+  'RETORNAR_SOLICITACAO', 'SINCRONIZAR_CADASTRO_AGHU',
+  // anteriores à T4.1, ainda na trilha
+  'ABRIR_CASO', 'ENCAMINHAR_CASO', 'RETORNAR_CASO',
   'CRIAR_PACIENTE', 'ALTERAR_PACIENTE', 'EXCLUIR_PACIENTE', 'REGISTRAR_ALTA_PACIENTE',
   ...FASES_COM_FORMULARIO.flatMap((f) => [`SALVAR_${f}`, `CONCLUIR_${f}`, `EDITAR_CONCLUIDA_${f}`]),
 ];
@@ -46,6 +48,14 @@ describe('services/auditoria · rótulos das ações', () => {
     expect(rotuloAcao('salvar_fase_nova')).toBe('Salvar fase nova');
     expect(rotuloAcao('')).toBe('—');
     expect(rotuloAcao(null)).toBe('—');
+  });
+
+  it('códigos anteriores à T4.1 têm o mesmo rótulo dos novos e ficam marcados como legados', () => {
+    expect(rotuloAcao('ABRIR_CASO')).toBe(rotuloAcao('ABRIR_SOLICITACAO'));
+    expect(rotuloAcao('ENCAMINHAR_CASO')).toBe(rotuloAcao('ENCAMINHAR_SOLICITACAO'));
+    expect(rotuloAcao('RETORNAR_CASO')).toBe(rotuloAcao('RETORNAR_SOLICITACAO'));
+    const legados = acoesConhecidas().filter((a) => a.legado).map((a) => a.valor);
+    expect(legados).toEqual(['ABRIR_CASO', 'ENCAMINHAR_CASO', 'RETORNAR_CASO']);
   });
 
   it('ações fixas não se repetem', () => {

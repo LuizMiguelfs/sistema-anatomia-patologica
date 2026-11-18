@@ -6,8 +6,8 @@ import api from './api';
 import { rotuloAcao } from './auditoria';
 import { rotuloEtapa } from './solicitacoes';
 
-/** Prefixo do recurso na trilha. Ainda é "caso"; muda junto com a renomeação (T4.1). */
-export const RECURSO_SOLICITACAO = 'caso';
+/** Prefixo do recurso na trilha. Registros anteriores à T4.1 usam "caso:<id>"; a API devolve os dois. */
+export const RECURSO_SOLICITACAO = 'solicitacao';
 
 /** Limite da API por consulta; uma solicitação tem bem menos eventos que isso. */
 export const LIMITE_HISTORICO = 200;
@@ -40,6 +40,9 @@ export interface ItemLinhaDoTempo {
   detalhe: string | null;
 }
 
+/** Encaminhar e retornar, com os códigos novos e os anteriores à T4.1. */
+const ACOES_DE_MOVIMENTO = new Set(['ENCAMINHAR_SOLICITACAO', 'RETORNAR_SOLICITACAO', 'ENCAMINHAR_CASO', 'RETORNAR_CASO']);
+
 /** Lê um campo de um objeto de dados da trilha (ou null). */
 function campo(dados: unknown, nome: string): string | null {
   if (typeof dados !== 'object' || dados === null || Array.isArray(dados)) return null;
@@ -51,7 +54,7 @@ function campo(dados: unknown, nome: string): string | null {
 export function detalheDoEvento(evento: EventoHistorico): string | null {
   const acao = evento.acao.toUpperCase();
   const destino = campo(evento.dados_novos, 'etapa_atual');
-  if (acao === 'ABRIR_CASO') {
+  if (acao === 'ABRIR_SOLICITACAO' || acao === 'ABRIR_CASO') {
     const codigo = campo(evento.dados_novos, 'identificador_interno');
     return codigo ? `Código interno ${codigo}` : null;
   }
@@ -59,7 +62,7 @@ export function detalheDoEvento(evento: EventoHistorico): string | null {
     const origem = campo(evento.dados_anteriores, 'etapa_atual');
     return origem ? `Voltou de ${rotuloEtapa(origem)} para a Recepção` : 'Voltou para a Recepção';
   }
-  if (acao === 'MARCAR_RETIRADO' || acao.startsWith('CONCLUIR_') || acao === 'ENCAMINHAR_CASO' || acao === 'RETORNAR_CASO') {
+  if (acao === 'MARCAR_RETIRADO' || acao.startsWith('CONCLUIR_') || ACOES_DE_MOVIMENTO.has(acao)) {
     return destino ? `Seguiu para ${rotuloEtapa(destino)}` : null;
   }
   return null;

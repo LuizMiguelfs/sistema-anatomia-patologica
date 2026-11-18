@@ -22,7 +22,7 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 
 from src.auth.auth import auth_handler
-from src.controllers import caso_controller
+from src.controllers import solicitacao_controller
 from src.dependencies import get_aghu_solicitacao_provider
 from src.helpers.formularios_fase import campos_da_fase
 from src.main import app
@@ -111,7 +111,7 @@ class Cenario:
         """Solicitação recebida no AGHU e aberta no SAP (fica em RECEPCAO, não retirada)."""
         numero = str(next(self._numeros))
         self.aghu.tipos[numero] = tipo
-        r = self.client.post("/api/casos", json={"solicitacao_aghu": numero}, headers=_cabecalho(RECEPCAO))
+        r = self.client.post("/api/solicitacoes", json={"solicitacao_aghu": numero}, headers=_cabecalho(RECEPCAO))
         assert r.status_code == 201, r.text
         return r.json()["id"]
 
@@ -121,13 +121,13 @@ class Cenario:
         A posição é gravada direto no banco para não depender das próprias permissões
         que este teste confere.
         """
-        caso_id = self.nova(TIPO_POR_FASE[etapa])
+        solicitacao_id = self.nova(TIPO_POR_FASE[etapa])
         with sqlite3.connect(self.db) as conn:
             conn.execute(
-                "UPDATE casos SET etapa_atual = ?, retirado_em = ?, retirado_por = ? WHERE id = ?",
-                (etapa, datetime.now(timezone.utc).isoformat(), "preparo.teste", caso_id),
+                "UPDATE solicitacoes_exame SET etapa_atual = ?, retirado_em = ?, retirado_por = ? WHERE id = ?",
+                (etapa, datetime.now(timezone.utc).isoformat(), "preparo.teste", solicitacao_id),
             )
-        return caso_id
+        return solicitacao_id
 
 
 def _valor_ficticio(campo: Dict[str, Any]) -> Any:
@@ -155,7 +155,7 @@ def cenario(tmp_path, monkeypatch):
     db = tmp_path / "app.db"
     monkeypatch.setenv("SQLITE_DSN", f"sqlite+aiosqlite:///{db}")
     command.upgrade(Config("alembic.ini"), "head")
-    monkeypatch.setattr(caso_controller, "_ano_local", lambda: 2026)
+    monkeypatch.setattr(solicitacao_controller, "_ano_local", lambda: 2026)
     aghu = AghuFalso()
     app.dependency_overrides[get_aghu_solicitacao_provider] = lambda: aghu
     try:
@@ -186,8 +186,8 @@ def _conferir(acao: str, respostas: Dict[str, int], permitidos: set) -> None:
 def test_retirar(cenario):
     respostas = {}
     for perfil in PERFIS:
-        caso_id = cenario.nova("HP")
-        r = cenario.client.post(f"/api/solicitacoes/{caso_id}/retirar", headers=_cabecalho(perfil))
+        solicitacao_id = cenario.nova("HP")
+        r = cenario.client.post(f"/api/solicitacoes/{solicitacao_id}/retirar", headers=_cabecalho(perfil))
         respostas[perfil] = r.status_code
     _conferir("retirar", respostas, MATRIZ_SOLICITACOES["retirar"])
 
@@ -195,8 +195,8 @@ def test_retirar(cenario):
 def test_desfazer_retirada(cenario):
     respostas = {}
     for perfil in PERFIS:
-        caso_id = cenario.na_fase("MACROSCOPIA")
-        r = cenario.client.post(f"/api/solicitacoes/{caso_id}/desfazer-retirada", headers=_cabecalho(perfil))
+        solicitacao_id = cenario.na_fase("MACROSCOPIA")
+        r = cenario.client.post(f"/api/solicitacoes/{solicitacao_id}/desfazer-retirada", headers=_cabecalho(perfil))
         respostas[perfil] = r.status_code
     _conferir("desfazer retirada", respostas, MATRIZ_SOLICITACOES["desfazer_retirada"])
 
@@ -208,9 +208,9 @@ def test_desfazer_retirada(cenario):
 def test_salvar_na_fase(cenario, etapa):
     respostas = {}
     for perfil in PERFIS:
-        caso_id = cenario.na_fase(etapa)
+        solicitacao_id = cenario.na_fase(etapa)
         r = cenario.client.put(
-            f"/api/fases/{etapa}/solicitacoes/{caso_id}",
+            f"/api/fases/{etapa}/solicitacoes/{solicitacao_id}",
             json={"dados": {"observacoes": f"rascunho de {perfil}"}}, headers=_cabecalho(perfil),
         )
         respostas[perfil] = r.status_code
@@ -221,9 +221,9 @@ def test_salvar_na_fase(cenario, etapa):
 def test_concluir_na_fase(cenario, etapa):
     respostas = {}
     for perfil in PERFIS:
-        caso_id = cenario.na_fase(etapa)
+        solicitacao_id = cenario.na_fase(etapa)
         r = cenario.client.post(
-            f"/api/fases/{etapa}/solicitacoes/{caso_id}/concluir",
+            f"/api/fases/{etapa}/solicitacoes/{solicitacao_id}/concluir",
             json={"dados": _formulario_completo(etapa, perfil)}, headers=_cabecalho(perfil),
         )
         respostas[perfil] = r.status_code
@@ -237,15 +237,15 @@ def test_concluir_na_fase(cenario, etapa):
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("etapa", list(MATRIZ_FASES))
 def test_todos_veem_e_flags_seguem_a_matriz(cenario, etapa):
-    caso_id = cenario.na_fase(etapa)
+    solicitacao_id = cenario.na_fase(etapa)
     restritos = CAMPOS_RESTRITOS.get(etapa, {})
     for perfil in PERFIS:
         cab = _cabecalho(perfil)
         fila = cenario.client.get(f"/api/fases/{etapa}/fila", headers=cab)
         assert fila.status_code == 200, f"{perfil} não conseguiu ver a fila de {etapa}"
-        assert caso_id in [i["id"] for i in fila.json()["items"]]
+        assert solicitacao_id in [i["id"] for i in fila.json()["items"]]
 
-        form = cenario.client.get(f"/api/fases/{etapa}/solicitacoes/{caso_id}", headers=cab)
+        form = cenario.client.get(f"/api/fases/{etapa}/solicitacoes/{solicitacao_id}", headers=cab)
         assert form.status_code == 200, f"{perfil} não conseguiu abrir o formulário de {etapa}"
         corpo = form.json()
         pode_salvar = perfil in MATRIZ_FASES[etapa]["salvar"]
@@ -269,9 +269,9 @@ def test_todos_veem_as_solicitacoes(cenario):
 @pytest.mark.parametrize("etapa", sorted(CAMPOS_RESTRITOS))
 def test_campo_restrito_e_ignorado_para_outro_perfil(cenario, etapa):
     """O residente pode salvar a fase, mas o diagnóstico enviado por ele não é gravado."""
-    caso_id = cenario.na_fase(etapa)
+    solicitacao_id = cenario.na_fase(etapa)
     r = cenario.client.put(
-        f"/api/fases/{etapa}/solicitacoes/{caso_id}",
+        f"/api/fases/{etapa}/solicitacoes/{solicitacao_id}",
         json={"dados": {"diagnostico": "tentativa do residente"}}, headers=_cabecalho(RESIDENTE),
     )
     assert r.status_code == 200, r.text
@@ -290,7 +290,7 @@ def test_configuracoes_so_chefia(cenario):
 
 
 def test_sem_login_nada_responde(cenario):
-    caso_id = cenario.na_fase("MACROSCOPIA")
+    solicitacao_id = cenario.na_fase("MACROSCOPIA")
     assert cenario.client.get("/api/solicitacoes").status_code == 401
-    assert cenario.client.get(f"/api/fases/MACROSCOPIA/solicitacoes/{caso_id}").status_code == 401
-    assert cenario.client.post(f"/api/solicitacoes/{caso_id}/desfazer-retirada").status_code == 401
+    assert cenario.client.get(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao_id}").status_code == 401
+    assert cenario.client.post(f"/api/solicitacoes/{solicitacao_id}/desfazer-retirada").status_code == 401

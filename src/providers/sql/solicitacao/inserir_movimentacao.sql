@@ -1,0 +1,2 @@
+INSERT INTO solicitacao_movimentacoes (solicitacao_id, tipo, etapa_origem, etapa_destino, motivo, usuario, criado_em)
+VALUES (:solicitacao_id, :tipo, :etapa_origem, :etapa_destino, :motivo, :usuario, :agora);

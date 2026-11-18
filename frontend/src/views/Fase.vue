@@ -91,11 +91,11 @@
     </p>
 
     <FormularioFase
-      :show="casoAberto !== null"
+      :show="solicitacaoAberta !== null"
       :etapa="etapa"
-      :caso-id="casoAberto"
+      :solicitacao-id="solicitacaoAberta"
       :dias-edicao="definicao?.dias_edicao_apos_conclusao ?? 6"
-      @close="casoAberto = null"
+      @close="solicitacaoAberta = null"
       @alterado="carregar"
     />
   </div>
@@ -123,7 +123,7 @@ const filtros = reactive({ busca: '', tipo_exame: '' });
 const itens = ref<ItemFila[]>([]);
 const carregando = ref(false);
 const erro = ref('');
-const casoAberto = ref<number | null>(null);
+const solicitacaoAberta = ref<number | null>(null);
 const pendentes = computed(() => itens.value.filter((i) => i.pendente).length);
 
 /** Carrega a fila da fase com os filtros. */
@@ -143,11 +143,11 @@ async function carregar(): Promise<void> {
 
 /** Abre o formulário da solicitação. */
 function abrir(id: number): void {
-  casoAberto.value = id;
+  solicitacaoAberta.value = id;
 }
 
 watch(etapa, () => {
-  casoAberto.value = null;
+  solicitacaoAberta.value = null;
   Object.assign(filtros, { busca: '', tipo_exame: '' });
   carregar();
 }, { immediate: true });

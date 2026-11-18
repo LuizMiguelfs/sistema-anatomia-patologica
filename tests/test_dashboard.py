@@ -16,12 +16,12 @@ async def test_provider_retorna_dados_demonstrativos():
 
     assert isinstance(resultado, DashboardResumoResponse)
     assert resultado.origem_dados == OrigemDados.DEMONSTRACAO
-    assert resultado.operacional.total_casos == 120
-    assert resultado.operacional.casos_pendentes == 38
+    assert resultado.operacional.total_solicitacoes == 120
+    assert resultado.operacional.solicitacoes_pendentes == 38
 
 def test_modelo_rejeita_valores_invalidos():
     with pytest.raises(ValidationError):
-        ResumoOperacional(casos_atrasados=-1)
+        ResumoOperacional(solicitacoes_atrasadas=-1)
 
 #! verifica a proteção de rota
 def test_endpoint_exige_autenticacao():
@@ -43,7 +43,7 @@ def test_endpoint_retorna_resumo_autenticado():
         assert resposta.status_code == 200
         dados = resposta.json()
         assert dados["origem_dados"] == "demonstracao"
-        assert dados["operacional"]["total_casos"] == 120
+        assert dados["operacional"]["total_solicitacoes"] == 120
         assert dados["gerencial"]["percentual_cumprimento_prazo"] == 87.5
         
     finally:
@@ -60,29 +60,29 @@ async def test_dashboard_sqlite_com_dados_reais_e_sla_explicito(tmp_path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'dashboard.db'}")
     async with engine.begin() as conn:
         await conn.execute(text("""
-            CREATE TABLE casos (
+            CREATE TABLE solicitacoes_exame (
                 id INTEGER PRIMARY KEY,
                 tipo_exame TEXT, status TEXT, criado_em TEXT, etapa_atual TEXT, ativo INTEGER
             )
         """))
         await conn.execute(text("""
-            CREATE TABLE caso_inconformidades (caso_id INTEGER, situacao TEXT)
+            CREATE TABLE solicitacao_inconformidades (solicitacao_id INTEGER, situacao TEXT)
         """))
         await conn.execute(text("""
-            INSERT INTO casos(tipo_exame, status, criado_em, etapa_atual, ativo)
+            INSERT INTO solicitacoes_exame(tipo_exame, status, criado_em, etapa_atual, ativo)
             VALUES ('HP', 'EM_ANDAMENTO', :criado, 'RECEPCAO', 1)
         """), {"criado": (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()})
     try:
         async with async_sessionmaker(engine)() as sess:
             sem_sla = await DashboardSqliteProvider(sess).obter_resumo()
             assert sem_sla.origem_dados == OrigemDados.BANCO_DADOS
-            assert sem_sla.operacional.total_casos == 1
-            assert sem_sla.operacional.casos_pendentes == 1
-            assert sem_sla.operacional.casos_atrasados is None
+            assert sem_sla.operacional.total_solicitacoes == 1
+            assert sem_sla.operacional.solicitacoes_pendentes == 1
+            assert sem_sla.operacional.solicitacoes_atrasadas is None
             assert sem_sla.gerencial.tempo_medio_liberacao_horas is None
 
             com_sla = await DashboardSqliteProvider(sess, {"HP": 4}).obter_resumo()
-            assert com_sla.operacional.casos_atrasados == 1
-            assert com_sla.prazo_cobertura_casos == 1
+            assert com_sla.operacional.solicitacoes_atrasadas == 1
+            assert com_sla.prazo_cobertura_solicitacoes == 1
     finally:
         await engine.dispose()

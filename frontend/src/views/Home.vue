@@ -19,9 +19,9 @@ type OrigemDados =
   | 'indisponivel';
 
 interface ResumoOperacional {
-  total_casos: number | null;
-  casos_pendentes: number | null;
-  casos_atrasados: number | null;
+  total_solicitacoes: number | null;
+  solicitacoes_pendentes: number | null;
+  solicitacoes_atrasadas: number | null;
   aguardando_complementacao: number | null;
 }
 
@@ -42,13 +42,13 @@ interface DashboardResumo {
   gerencial: IndicadoresGerenciais;
   criterios: Record<string, string>;
   prazos_horas_por_tipo: Record<string, number>;
-  prazo_cobertura_casos: number;
+  prazo_cobertura_solicitacoes: number;
 }
 
 const ROTULOS: Record<string, string> = {
-  total_casos: 'Total de solicitações',
-  casos_pendentes: 'Solicitações pendentes',
-  casos_atrasados: 'Solicitações atrasadas',
+  total_solicitacoes: 'Total de solicitações',
+  solicitacoes_pendentes: 'Solicitações pendentes',
+  solicitacoes_atrasadas: 'Solicitações atrasadas',
   aguardando_complementacao: 'Aguardando complementação',
   tempo_medio_liberacao_horas: 'Tempo médio de liberação',
   percentual_cumprimento_prazo: 'Cumprimento de prazo',
@@ -221,7 +221,7 @@ onMounted(() => {
             </span>
           </p>
           <p class="mt-1">Solicitações pendentes cobertas por prazo:
-            {{ resumo.prazo_cobertura_casos }} / {{ resumo.operacional.casos_pendentes ?? '—' }}.
+            {{ resumo.prazo_cobertura_solicitacoes }} / {{ resumo.operacional.solicitacoes_pendentes ?? '—' }}.
             Quando a cobertura é incompleta, a contagem de atrasados fica indisponível.
           </p>
         </div>
@@ -242,7 +242,7 @@ onMounted(() => {
               Total de solicitações
             </p>
             <p class="mt-3 text-3xl font-bold text-gray-800">
-              {{ formatarNumero(resumo.operacional.total_casos) }}
+              {{ formatarNumero(resumo.operacional.total_solicitacoes) }}
             </p>
           </Card>
 
@@ -251,7 +251,7 @@ onMounted(() => {
               Solicitações pendentes
             </p>
             <p class="mt-3 text-3xl font-bold text-gray-800">
-              {{ formatarNumero(resumo.operacional.casos_pendentes) }}
+              {{ formatarNumero(resumo.operacional.solicitacoes_pendentes) }}
             </p>
           </Card>
 
@@ -260,7 +260,7 @@ onMounted(() => {
               Solicitações atrasadas
             </p>
             <p class="mt-3 text-3xl font-bold text-red-700">
-              {{ formatarNumero(resumo.operacional.casos_atrasados) }}
+              {{ formatarNumero(resumo.operacional.solicitacoes_atrasadas) }}
             </p>
           </Card>
 

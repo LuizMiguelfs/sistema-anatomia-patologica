@@ -18,12 +18,12 @@ from fastapi import HTTPException
 from ..helpers.formularios_fase import (
     DIAS_EDICAO_APOS_CONCLUSAO, FASES, FASES_POR_ETAPA, campos_da_fase,
 )
-from ..providers.interfaces.caso_provider_interface import CasoProviderInterface
-from .caso_controller import (
-    STATUS_ARQUIVADO, _agora, _caso_ou_404, _esta_em_desvio, _exigir_sem_pendencias, _gravar,
+from ..providers.interfaces.solicitacao_provider_interface import SolicitacaoProviderInterface
+from .solicitacao_controller import (
+    STATUS_ARQUIVADO, _agora, _solicitacao_ou_404, _esta_em_desvio, _exigir_sem_pendencias, _gravar,
     _login, _perfil, _status_derivado,
 )
-from .solicitacao_controller import normalizar_filtros_busca
+from .retirada_controller import normalizar_filtros_busca
 
 logger = logging.getLogger("fases")
 
@@ -74,7 +74,7 @@ def formularios() -> List[Dict[str, Any]]:
 # Fila da fase                                                                 #
 # --------------------------------------------------------------------------- #
 async def listar_fila(
-    etapa: str, filtros: Dict[str, Any], pagina: int, limite: int, provider: CasoProviderInterface,
+    etapa: str, filtros: Dict[str, Any], pagina: int, limite: int, provider: SolicitacaoProviderInterface,
 ) -> Dict[str, Any]:
     """Pendentes da fase e concluídas recentes (ainda editáveis), paginadas."""
     fase = _fase_ou_404(etapa)
@@ -160,28 +160,28 @@ def _exigir_obrigatorios(campos: List[Dict[str, Any]], dados: Dict[str, Any]) ->
 
 
 async def obter_fase(
-    etapa: str, caso_id: int, usuario: Dict[str, Any], provider: CasoProviderInterface,
+    etapa: str, solicitacao_id: int, usuario: Dict[str, Any], provider: SolicitacaoProviderInterface,
 ) -> Dict[str, Any]:
     """Formulário da fase para a solicitação, com o que o perfil pode fazer nele."""
     fase = _fase_ou_404(etapa)
-    caso = await _caso_ou_404(provider, caso_id)
-    registro = await provider.buscar_fase(caso_id, fase["etapa"])
+    solicitacao = await _solicitacao_ou_404(provider, solicitacao_id)
+    registro = await provider.buscar_fase(solicitacao_id, fase["etapa"])
     perfil = _perfil(usuario)
-    pendente = caso["etapa_atual"] == fase["etapa"] and caso["status"] != STATUS_ARQUIVADO
+    pendente = solicitacao["etapa_atual"] == fase["etapa"] and solicitacao["status"] != STATUS_ARQUIVADO
     concluida_editavel = bool(
         registro and registro["situacao"] == SITUACAO_CONCLUIDA and not pendente
         and _dentro_do_prazo(registro.get("concluido_em"))
     )
-    campos = campos_da_fase(fase["etapa"], caso["tipo_exame"])
+    campos = campos_da_fase(fase["etapa"], solicitacao["tipo_exame"])
     pode_salvar = perfil in fase["salvar"] and (pendente or concluida_editavel)
-    amostras = await provider.listar_amostras(caso_id)
+    amostras = await provider.listar_amostras(solicitacao_id)
     return {
         "etapa": fase["etapa"], "rotulo": fase["rotulo"],
         "solicitacao": {
-            "id": caso["id"], "identificador_interno": caso["identificador_interno"],
-            "solicitacao_aghu": caso["solicitacao_aghu"], "paciente_nome": caso["paciente_nome"],
-            "prontuario_aghu": caso.get("prontuario_aghu"), "tipo_exame": caso["tipo_exame"],
-            "etapa_atual": caso["etapa_atual"], "urgente": bool(caso.get("urgente")),
+            "id": solicitacao["id"], "identificador_interno": solicitacao["identificador_interno"],
+            "solicitacao_aghu": solicitacao["solicitacao_aghu"], "paciente_nome": solicitacao["paciente_nome"],
+            "prontuario_aghu": solicitacao.get("prontuario_aghu"), "tipo_exame": solicitacao["tipo_exame"],
+            "etapa_atual": solicitacao["etapa_atual"], "urgente": bool(solicitacao.get("urgente")),
             "amostras": amostras,
         },
         "situacao": registro["situacao"] if registro else None,
@@ -199,17 +199,17 @@ async def obter_fase(
 
 
 async def salvar_fase(
-    etapa: str, caso_id: int, enviados: Dict[str, Any], usuario: Dict[str, Any], ip: Optional[str],
-    provider: CasoProviderInterface,
+    etapa: str, solicitacao_id: int, enviados: Dict[str, Any], usuario: Dict[str, Any], ip: Optional[str],
+    provider: SolicitacaoProviderInterface,
 ) -> Dict[str, Any]:
     """Salvar: grava o formulário (rascunho na fase atual, ou edição de fase concluída dentro do prazo)."""
     fase = _fase_ou_404(etapa)
     perfil = _perfil(usuario)
     if perfil not in fase["salvar"]:
         raise HTTPException(status_code=403, detail=f"Seu perfil não tem permissão para editar a fase {fase['rotulo']}.")
-    caso = await _caso_ou_404(provider, caso_id)
-    registro = await provider.buscar_fase(caso_id, fase["etapa"])
-    pendente = caso["etapa_atual"] == fase["etapa"] and caso["status"] != STATUS_ARQUIVADO
+    solicitacao = await _solicitacao_ou_404(provider, solicitacao_id)
+    registro = await provider.buscar_fase(solicitacao_id, fase["etapa"])
+    pendente = solicitacao["etapa_atual"] == fase["etapa"] and solicitacao["status"] != STATUS_ARQUIVADO
     editando_concluida = bool(
         registro and registro["situacao"] == SITUACAO_CONCLUIDA and not pendente
         and _dentro_do_prazo(registro.get("concluido_em"))
@@ -217,7 +217,7 @@ async def salvar_fase(
     if not (pendente or editando_concluida):
         raise HTTPException(status_code=409, detail=f"A solicitação não está na fase {fase['rotulo']} e não pode mais ser editada nela.")
 
-    campos = campos_da_fase(fase["etapa"], caso["tipo_exame"])
+    campos = campos_da_fase(fase["etapa"], solicitacao["tipo_exame"])
     anteriores = registro["dados"] if registro else {}
     dados = _mesclar(campos, anteriores, enviados, perfil)
     if editando_concluida:
@@ -225,7 +225,7 @@ async def salvar_fase(
     agora = _agora()
     try:
         await provider.salvar_fase({
-            "caso_id": caso_id, "etapa": fase["etapa"], "dados": dados,
+            "solicitacao_id": solicitacao_id, "etapa": fase["etapa"], "dados": dados,
             "situacao": SITUACAO_CONCLUIDA if editando_concluida else SITUACAO_RASCUNHO,
             "usuario": _login(usuario), "agora": agora,
             "concluido_por": registro["concluido_por"] if editando_concluida else None,
@@ -234,60 +234,60 @@ async def salvar_fase(
         await _gravar(
             provider, usuario=usuario, ip=ip,
             acao=f"{'EDITAR_CONCLUIDA' if editando_concluida else 'SALVAR'}_{fase['etapa']}",
-            caso_id=caso_id, anteriores=anteriores or None, novos=dados,
+            solicitacao_id=solicitacao_id, anteriores=anteriores or None, novos=dados,
         )
         await provider.commit()
     except Exception as erro:
         await provider.rollback()
         logger.error("Falha em %s: %s", "SALVAR_FASE", erro.__class__.__name__)
         raise
-    return await obter_fase(fase["etapa"], caso_id, usuario, provider)
+    return await obter_fase(fase["etapa"], solicitacao_id, usuario, provider)
 
 
 async def concluir_fase(
-    etapa: str, caso_id: int, enviados: Dict[str, Any], usuario: Dict[str, Any], ip: Optional[str],
-    provider: CasoProviderInterface,
+    etapa: str, solicitacao_id: int, enviados: Dict[str, Any], usuario: Dict[str, Any], ip: Optional[str],
+    provider: SolicitacaoProviderInterface,
 ) -> Dict[str, Any]:
     """Concluído: exige os obrigatórios e envia a solicitação para a próxima fase."""
     fase = _fase_ou_404(etapa)
     perfil = _perfil(usuario)
     if perfil not in fase["concluir"]:
         raise HTTPException(status_code=403, detail=f"Seu perfil não tem permissão para concluir a fase {fase['rotulo']}.")
-    caso = await _caso_ou_404(provider, caso_id)
-    if caso["etapa_atual"] != fase["etapa"] or caso["status"] == STATUS_ARQUIVADO:
+    solicitacao = await _solicitacao_ou_404(provider, solicitacao_id)
+    if solicitacao["etapa_atual"] != fase["etapa"] or solicitacao["status"] == STATUS_ARQUIVADO:
         raise HTTPException(status_code=409, detail=f"A solicitação não está pendente na fase {fase['rotulo']}.")
-    await _exigir_sem_pendencias(provider, caso_id)
+    await _exigir_sem_pendencias(provider, solicitacao_id)
 
-    campos = campos_da_fase(fase["etapa"], caso["tipo_exame"])
-    registro = await provider.buscar_fase(caso_id, fase["etapa"])
+    campos = campos_da_fase(fase["etapa"], solicitacao["tipo_exame"])
+    registro = await provider.buscar_fase(solicitacao_id, fase["etapa"])
     anteriores = registro["dados"] if registro else {}
     dados = _mesclar(campos, anteriores, enviados, perfil)
     _exigir_obrigatorios(campos, dados)
 
     # Veio por encaminhamento (ex.: IHQ pedida na Microscopia)? Volta à fase de origem.
-    desvio = await _esta_em_desvio(provider, caso)
+    desvio = await _esta_em_desvio(provider, solicitacao)
     if desvio:
         destino, tipo_mov = desvio["etapa_origem"], "RETORNO"
     else:
-        proximas = await provider.destinos(caso["tipo_exame"], fase["etapa"], "AVANCO")
+        proximas = await provider.destinos(solicitacao["tipo_exame"], fase["etapa"], "AVANCO")
         if not proximas:
-            raise HTTPException(status_code=409, detail=f"Não há próxima fase configurada após {fase['rotulo']} para {caso['tipo_exame']}.")
+            raise HTTPException(status_code=409, detail=f"Não há próxima fase configurada após {fase['rotulo']} para {solicitacao['tipo_exame']}.")
         destino, tipo_mov = proximas[0], "CONCLUSAO"
     status = _status_derivado(destino)
     agora = _agora()
     login = _login(usuario)
     try:
         await provider.salvar_fase({
-            "caso_id": caso_id, "etapa": fase["etapa"], "dados": dados, "situacao": SITUACAO_CONCLUIDA,
+            "solicitacao_id": solicitacao_id, "etapa": fase["etapa"], "dados": dados, "situacao": SITUACAO_CONCLUIDA,
             "usuario": login, "agora": agora, "concluido_por": login, "concluido_em": agora,
         })
         await provider.inserir_movimentacao({
-            "caso_id": caso_id, "tipo": tipo_mov, "etapa_origem": fase["etapa"],
+            "solicitacao_id": solicitacao_id, "tipo": tipo_mov, "etapa_origem": fase["etapa"],
             "etapa_destino": destino, "motivo": f"Fase {fase['rotulo']} concluída", "usuario": login, "agora": agora,
         })
-        await provider.atualizar_etapa(caso_id, destino, status, agora)
+        await provider.atualizar_etapa(solicitacao_id, destino, status, agora)
         await _gravar(
-            provider, usuario=usuario, ip=ip, acao=f"CONCLUIR_{fase['etapa']}", caso_id=caso_id,
+            provider, usuario=usuario, ip=ip, acao=f"CONCLUIR_{fase['etapa']}", solicitacao_id=solicitacao_id,
             anteriores={"etapa_atual": fase["etapa"], "formulario": anteriores or None},
             novos={"etapa_atual": destino, "status": status, "formulario": dados},
         )
@@ -296,4 +296,4 @@ async def concluir_fase(
         await provider.rollback()
         logger.error("Falha em %s: %s", "CONCLUIR_FASE", erro.__class__.__name__)
         raise
-    return await obter_fase(fase["etapa"], caso_id, usuario, provider)
+    return await obter_fase(fase["etapa"], solicitacao_id, usuario, provider)

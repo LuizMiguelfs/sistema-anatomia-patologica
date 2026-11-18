@@ -10,9 +10,9 @@ class DashboardDemoProvider(DashboardProviderInterface):
             origem_dados=OrigemDados.DEMONSTRACAO,
             atualizado_em=datetime.now(timezone.utc),
             operacional=ResumoOperacional(
-                total_casos=120,
-                casos_pendentes=38,
-                casos_atrasados=12,
+                total_solicitacoes=120,
+                solicitacoes_pendentes=38,
+                solicitacoes_atrasadas=12,
                 aguardando_complementacao=8,
             ),
             gerencial=IndicadoresGerenciais(

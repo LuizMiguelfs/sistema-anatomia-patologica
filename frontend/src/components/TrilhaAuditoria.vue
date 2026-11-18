@@ -185,7 +185,7 @@ watch(() => filtros.categoria, (categoria) => {
 
 /** Ações do filtro, agrupadas por categoria; com uma categoria escolhida, só as dela. */
 const gruposDeAcoes = computed(() => {
-  const todas = acoesConhecidas();
+  const todas = acoesConhecidas().filter((a) => !a.legado); // código antigo repetiria o mesmo rótulo
   return categorias
     .filter((c) => !filtros.categoria || c.valor === filtros.categoria)
     .map((c) => ({

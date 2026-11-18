@@ -21,12 +21,12 @@ def test_helper_commit_false_grava_junto_com_a_transacao(ambiente):
 
     async def _rollback(session):
         await registrar_auditoria(session, "joao.silva", "NEGOCIO_CLINICO", "ACAO_DESFEITA",
-                                  "caso:1", commit=False)
+                                  "solicitacao:1", commit=False)
         await session.rollback()
 
     async def _commit(session):
         await registrar_auditoria(session, "joao.silva", "NEGOCIO_CLINICO", "ACAO_CONFIRMADA",
-                                  "caso:1", commit=False)
+                                  "solicitacao:1", commit=False)
         await session.commit()
 
     _com_sessao(client, _rollback)
