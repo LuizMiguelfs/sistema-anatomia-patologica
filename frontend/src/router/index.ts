@@ -2,9 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import Home from '../views/Home.vue';
 import Login from '../views/Login.vue';
-import Pacientes from '../views/Pacientes.vue';
 import Configuracoes from '../views/Configuracoes.vue';
-import Casos from '../views/Casos.vue';
 import Solicitacoes from '../views/Solicitacoes.vue';
 import Fase from '../views/Fase.vue';
 
@@ -14,8 +12,9 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'Início', component: Home, meta: { requiresAuth: true } },
     { path: '/login', name: 'Login', component: Login, meta: { layout: 'LoginLayout', public: true } },
-    { path: '/pacientes', name: 'Pacientes', component: Pacientes, meta: { requiresAuth: true } },
-    { path: '/casos', name: 'Casos', component: Casos, meta: { requiresAuth: true } },
+    // Telas antigas, fora do escopo do MVP: endereços salvos levam ao Início.
+    { path: '/pacientes', redirect: '/' },
+    { path: '/casos', redirect: '/' },
     { path: '/configuracoes', name: 'Configurações', component: Configuracoes, meta: { requiresAuth: true } },
     // Solicitações de Exames (MVP)
     { path: '/solicitacoes', redirect: '/solicitacoes/nao-retirados' },

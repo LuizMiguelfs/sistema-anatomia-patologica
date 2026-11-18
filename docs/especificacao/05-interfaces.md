@@ -6,9 +6,9 @@
 |---|---|---|---|
 | `Login.vue` | `/login` | `src/routers/auth.py` | Login e recuperação de sessão |
 | `Home.vue` | `/` | `GET /api/dashboard/resumo` | Indicadores do banco local com dicionário de KPIs; não medidos retornam `null` |
-| `Pacientes.vue` | `/pacientes` | `GET /api/pacientes` | Consulta somente leitura do AGHU (ou CSV offline) |
-| `Casos.vue` | `/casos` | `/api/casos` | Abrir caso com tipo obrigatório do AGHU, buscar, concluir, encaminhar, retornar, conferir e sincronizar cadastro com auditoria |
 | `Configuracoes.vue` | `/configuracoes` | `/api/admin/usuarios`, `/api/admin/ad-user-search/{login}`, `/api/admin/auditoria` | Perfil do usuário (todos); gestão de usuários (Chefia); trilha de auditoria (Chefia e TI) |
+
+As telas antigas `Pacientes.vue` e `Casos.vue` saíram do frontend; `/pacientes` e `/casos` levam ao Início. As APIs `/api/pacientes` (somente consulta) e `/api/casos` continuam.
 
 O backend ainda expõe `GET /api/auditoria/historico`, autenticado, para histórico de um recurso. A documentação interativa de endpoints é fornecida pela aplicação em `/docs`.
 
