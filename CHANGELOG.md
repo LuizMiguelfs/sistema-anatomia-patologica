@@ -1,5 +1,10 @@
 # Registro de alterações — pacote de refino
 
+## Não lançado — Demonstração no Render
+
+- **Contêiner:** o `Dockerfile` passa a usar Python 3.13 e as dependências travadas do `uv.lock` (as mesmas do CI), aplica as migrações ao iniciar (`scripts/iniciar.sh`) e escuta na porta de `PORT` (padrão 8000).
+- **Render:** `render.yaml` sobe uma demonstração no plano gratuito, só com dados fictícios (AGHU simulado, login simulado e carga de demonstração). Os segredos ficam no painel do Render, fora do Git.
+
 ## 2026-11-18 — v1.2.0 — Solicitação de exame em todo o sistema, histórico, painel das filas e CI
 
 - **Termo único:** "caso" passa a "solicitação de exame" no código, nas rotas e no banco. A migração `20261118_renomear_solicitacao` só renomeia tabelas, colunas e índices (sem perda de dados) e descarta as tabelas novas vazias que o sistema cria ao subir antes de migrar. `/api/casos` passa a `/api/solicitacoes` (busca em `/api/solicitacoes/busca`). Na trilha de auditoria, os registros novos usam `solicitacao:<id>` e os antigos (`caso:<id>`) continuam aparecendo no histórico.
