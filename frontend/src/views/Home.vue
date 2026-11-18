@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import Card from '../components/Card.vue';
 import api from '../services/api';
+import {
+  ROTA_NAO_RETIRADAS, fasesDoGrupo, locaisAguardandoPatologista, locaisComUrgentes, rotaDaFase,
+  type RetratoFilas,
+} from '../services/painel';
+import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
 
 import {
@@ -11,6 +16,7 @@ import {
   ClockIcon,
   DocumentTextIcon,
   ExclamationTriangleIcon,
+  InboxStackIcon,
 } from '@heroicons/vue/24/outline';
 
 type OrigemDados =
@@ -43,6 +49,7 @@ interface DashboardResumo {
   criterios: Record<string, string>;
   prazos_horas_por_tipo: Record<string, number>;
   prazo_cobertura_solicitacoes: number;
+  filas?: RetratoFilas | null;
 }
 
 const ROTULOS: Record<string, string> = {
@@ -57,10 +64,18 @@ const ROTULOS: Record<string, string> = {
   total_inconsistencias: 'Inconformidades abertas',
   total_rejeicoes: 'Rejeições',
   total_erros_transcricao: 'Erros de transcrição',
+  filas: 'Filas agora',
 };
 const rotuloIndicador = (chave: string) => ROTULOS[chave] || chave;
 
 const uiStore = useUiStore();
+const authStore = useAuthStore();
+/** O patologista vê primeiro o que espera a validação dele. */
+const ehPatologista = computed(() => authStore.role === 'PRECEPTORIA');
+const GRUPOS_DE_FASES = [
+  { grupo: 'PRE_ANALITICA', rotulo: 'Fase Pré-Analítica' },
+  { grupo: 'ANALITICA', rotulo: 'Fase Analítica' },
+];
 
 const resumo = ref<DashboardResumo | null>(null);
 const carregando = ref(false);
@@ -203,6 +218,84 @@ onMounted(() => {
       <div class="text-right text-xs text-gray-500">
         Atualizado em: {{ formatarData(resumo.atualizado_em) }}
       </div>
+
+      <!-- Filas agora (T5.1): cada número abre a aba onde estão as solicitações contadas -->
+      <section v-if="resumo.filas" class="space-y-4">
+        <div class="flex items-center gap-2">
+          <InboxStackIcon class="h-6 w-6 text-paper-text" />
+          <h2 class="text-xl font-bold text-paper-text">Filas agora</h2>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <router-link
+            :to="ROTA_NAO_RETIRADAS"
+            class="block rounded-lg bg-white p-6 shadow-paper transition hover:ring-2 hover:ring-paper-primary/40"
+          >
+            <p class="text-sm font-medium text-gray-500">Não retiradas</p>
+            <p class="mt-3 text-3xl font-bold text-gray-800">{{ formatarNumero(resumo.filas.nao_retiradas) }}</p>
+            <p class="mt-2 text-xs text-gray-500">Recebidas no AGHU e ainda na Recepção.</p>
+          </router-link>
+
+          <div class="rounded-lg bg-white p-6 shadow-paper">
+            <p class="text-sm font-medium text-gray-500">Urgentes pendentes</p>
+            <p class="mt-3 text-3xl font-bold" :class="resumo.filas.urgentes ? 'text-red-700' : 'text-gray-800'">
+              {{ formatarNumero(resumo.filas.urgentes) }}
+            </p>
+            <ul v-if="locaisComUrgentes(resumo.filas).length" class="mt-2 space-y-1 text-sm">
+              <li v-for="local in locaisComUrgentes(resumo.filas)" :key="local.rota">
+                <router-link :to="local.rota" class="text-red-700 underline-offset-2 hover:underline">
+                  {{ local.rotulo }}: {{ local.quantidade }}
+                </router-link>
+              </li>
+            </ul>
+            <p v-else class="mt-2 text-xs text-gray-500">Nenhuma urgência pendente.</p>
+          </div>
+
+          <div
+            class="rounded-lg bg-white p-6 shadow-paper"
+            :class="ehPatologista ? 'ring-2 ring-paper-primary/50 md:order-first' : ''"
+          >
+            <p class="text-sm font-medium text-gray-500">
+              {{ ehPatologista ? 'Aguardando sua validação' : 'Aguardando o patologista' }}
+            </p>
+            <p class="mt-3 text-3xl font-bold text-gray-800">{{ formatarNumero(resumo.filas.aguardando_patologista) }}</p>
+            <ul v-if="locaisAguardandoPatologista(resumo.filas).length" class="mt-2 space-y-1 text-sm">
+              <li v-for="local in locaisAguardandoPatologista(resumo.filas)" :key="local.rota">
+                <router-link :to="local.rota" class="text-paper-default underline-offset-2 hover:underline">
+                  {{ local.rotulo }}: {{ local.quantidade }}
+                </router-link>
+              </li>
+            </ul>
+            <p class="mt-2 text-xs text-gray-500">Pré-laudo salvo pelo residente, esperando validação e conclusão.</p>
+          </div>
+        </div>
+
+        <div v-for="g in GRUPOS_DE_FASES" :key="g.grupo" class="space-y-2">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-gray-500">{{ g.rotulo }}</h3>
+          <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <router-link
+              v-for="fase in fasesDoGrupo(resumo.filas, g.grupo)"
+              :key="fase.etapa"
+              :to="rotaDaFase(fase.etapa)"
+              class="block rounded-lg bg-white p-4 shadow-paper transition hover:ring-2 hover:ring-paper-primary/40"
+            >
+              <p class="text-sm font-medium text-gray-600">{{ fase.rotulo }}</p>
+              <p class="mt-2 text-2xl font-bold text-gray-800">
+                {{ formatarNumero(fase.pendentes) }}
+                <span class="text-sm font-normal text-gray-500">pendente(s)</span>
+              </p>
+              <p class="mt-1 flex flex-wrap gap-1 text-xs">
+                <span v-if="fase.urgentes" class="rounded bg-red-600 px-1.5 py-0.5 font-bold uppercase text-white">
+                  {{ fase.urgentes }} urgente(s)
+                </span>
+                <span v-if="fase.aguardando_patologista" class="rounded bg-blue-100 px-1.5 py-0.5 font-medium text-blue-800">
+                  {{ fase.aguardando_patologista }} aguardando patologista
+                </span>
+              </p>
+            </router-link>
+          </div>
+        </div>
+      </section>
 
       <!-- SLA: a referência é explícita e precisa de homologação da Chefia -->
       <section class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm">

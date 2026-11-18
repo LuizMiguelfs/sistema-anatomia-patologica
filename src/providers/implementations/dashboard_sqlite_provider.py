@@ -1,12 +1,14 @@
 """Dashboard calculado exclusivamente sobre eventos observáveis do banco local SAP."""
+import json
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...helpers.formularios_fase import CAMPO_PRE_LAUDO, FASES
 from ...models.dashboard import (
-    DashboardResumoResponse, IndicadoresGerenciais, OrigemDados, ResumoOperacional,
+    DashboardResumoResponse, FilaFase, IndicadoresGerenciais, OrigemDados, ResumoOperacional, RetratoFilas,
 )
 from ..interfaces.dashboard_provider_interface import DashboardProviderInterface
 from .solicitacao_sqlite_provider import get_sql_query
@@ -32,6 +34,11 @@ CRITERIOS: dict[str, str] = {
     "total_inconsistencias": "Número de inconformidades abertas vinculadas a solicitações ativas do SAP.",
     "total_rejeicoes": "Não mensurado: é necessário evento estruturado de rejeição de material.",
     "total_erros_transcricao": "Não mensurado: é necessário registrar divergências de transcrição confirmadas.",
+    "filas": (
+        "Retrato das filas agora: não retiradas (Recepção), pendentes e urgentes de cada fase, com a mesma "
+        "regra das telas. Aguardando o patologista = pendente na Congelação, Microscopia ou Revisão de Lâmina "
+        "com rascunho salvo e o pré-laudo (na Congelação, a análise preliminar) preenchido."
+    ),
 }
 
 
@@ -68,6 +75,7 @@ class DashboardSqliteProvider(DashboardProviderInterface):
                 if duracao_horas > self.prazos[solicitacao["tipo_exame"]]:
                     atrasados += 1
 
+        filas = await self._retrato_filas()
         return DashboardResumoResponse(
             origem_dados=OrigemDados.BANCO_DADOS,
             atualizado_em=agora,
@@ -79,4 +87,30 @@ class DashboardSqliteProvider(DashboardProviderInterface):
             criterios=CRITERIOS,
             prazos_horas_por_tipo=self.prazos,
             prazo_cobertura_solicitacoes=len(com_prazo),
+            filas=filas,
+        )
+
+    async def _retrato_filas(self) -> RetratoFilas:
+        """Pendentes, urgentes e aguardando o patologista em cada fila, agora (só contagens)."""
+        linhas = (await self.session.execute(
+            text(get_sql_query("solicitacao/dashboard_filas.sql")),
+            {"campos_pre_laudo": json.dumps(CAMPO_PRE_LAUDO)},
+        )).mappings().all()
+        por_etapa = {linha["etapa"]: linha for linha in linhas}
+        fases = []
+        for fase in FASES:  # ordem do menu
+            linha = por_etapa.get(fase["etapa"]) or {}
+            fases.append(FilaFase(
+                etapa=fase["etapa"], rotulo=fase["rotulo"], grupo=fase["grupo"],
+                pendentes=linha.get("pendentes") or 0, urgentes=linha.get("urgentes") or 0,
+                aguardando_patologista=(linha.get("aguardando_patologista") or 0) if fase["etapa"] in CAMPO_PRE_LAUDO else None,
+            ))
+        recepcao = por_etapa.get("RECEPCAO") or {}
+        nao_retiradas_urgentes = recepcao.get("nao_retiradas_urgentes") or 0
+        return RetratoFilas(
+            nao_retiradas=recepcao.get("nao_retiradas") or 0,
+            nao_retiradas_urgentes=nao_retiradas_urgentes,
+            urgentes=nao_retiradas_urgentes + sum(f.urgentes for f in fases),
+            aguardando_patologista=sum(f.aguardando_patologista or 0 for f in fases),
+            fases=fases,
         )

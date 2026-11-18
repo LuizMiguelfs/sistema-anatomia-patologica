@@ -27,6 +27,26 @@ class IndicadoresGerenciais(BaseModel):
     total_erros_transcricao: int | None = Field(default=None, ge=0)
 
 
+class FilaFase(BaseModel):
+    """Quantas solicitações estão pendentes numa fase agora."""
+    etapa: str
+    rotulo: str
+    grupo: str
+    pendentes: int = Field(ge=0)
+    urgentes: int = Field(ge=0)
+    #: Só nas fases com pré-laudo (Congelação, Microscopia, Revisão); None nas demais.
+    aguardando_patologista: int | None = Field(default=None, ge=0)
+
+
+class RetratoFilas(BaseModel):
+    """Retrato das filas no momento da consulta (mesma regra de "pendente" das telas)."""
+    nao_retiradas: int = Field(ge=0)
+    nao_retiradas_urgentes: int = Field(ge=0)
+    urgentes: int = Field(ge=0)
+    aguardando_patologista: int = Field(ge=0)
+    fases: list[FilaFase] = Field(default_factory=list)
+
+
 class DashboardResumoResponse(BaseModel):
     origem_dados: OrigemDados
     atualizado_em: datetime
@@ -35,3 +55,4 @@ class DashboardResumoResponse(BaseModel):
     criterios: dict[str, str] = Field(default_factory=dict)
     prazos_horas_por_tipo: dict[str, int] = Field(default_factory=dict)
     prazo_cobertura_solicitacoes: int = Field(default=0, ge=0)
+    filas: RetratoFilas | None = None
