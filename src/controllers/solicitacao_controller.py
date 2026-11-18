@@ -1,7 +1,9 @@
 """Controller do módulo de Solicitações (fluxo principal de negócio do SAP).
 
-Cobre: UC002 (abrir solicitação), UC019 (buscar solicitações), UC017 (concluir etapa),
-UC012 (encaminhar/retornar) e UC018 (histórico).
+Cobre: UC002 (abrir solicitação), UC019 (buscar solicitações), UC012 (encaminhar/retornar)
+e UC018 (histórico). Concluir uma etapa (UC017) só acontece pela retirada, na Recepção
+(``retirada_controller``), ou pelo "Concluído" do formulário de cada fase (``fase_controller``),
+que exige os campos obrigatórios (RN-03).
 
 Regras centrais:
 * O fluxo permitido por tipo de exame vem do banco (tabela ``fluxo_transicoes``),
@@ -19,6 +21,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from ..helpers.audit_helper import registrar_auditoria
+from ..helpers.formularios_fase import FASES_POR_ETAPA
 from ..providers.interfaces.aghu_solicitacao_provider_interface import AghuSolicitacaoProviderInterface
 from ..providers.interfaces.solicitacao_provider_interface import SolicitacaoProviderInterface
 
@@ -38,7 +41,7 @@ PERFIL_LABORATORIO = "LABORATORIO"
 PERFIL_RESIDENTE = "RESIDENTE"
 PERFIL_PRECEPTORIA = "PRECEPTORIA"
 
-# Quem é "responsável" por cada etapa (alçada para concluir/encaminhar/retornar).
+# Quem é "responsável" por cada etapa (alçada para encaminhar e retornar; concluir segue a matriz dos formulários).
 PERFIS_POR_ETAPA: Dict[str, set] = {
     "RECEPCAO": {PERFIL_RECEPCAO},
     # Matriz de perfis do MVP (ver src/helpers/formularios_fase.py).
@@ -295,69 +298,28 @@ async def obter_solicitacao(solicitacao_id: int, usuario: Dict[str, Any], provid
     solicitacao = await _solicitacao_ou_404(provider, solicitacao_id)
     amostras = await provider.listar_amostras(solicitacao_id)
     etapa = solicitacao["etapa_atual"]
-    responsavel = _perfil(usuario) in PERFIS_POR_ETAPA.get(etapa, set())
+    perfil = _perfil(usuario)
+    responsavel = perfil in PERFIS_POR_ETAPA.get(etapa, set())
     em_desvio = await _esta_em_desvio(provider, solicitacao)
     arquivado = solicitacao["status"] == STATUS_ARQUIVADO
     destinos = [] if arquivado else await provider.destinos(solicitacao["tipo_exame"], etapa, "ENCAMINHAMENTO")
-    proximas = [] if arquivado or em_desvio else await provider.destinos(solicitacao["tipo_exame"], etapa, "AVANCO")
+    # Concluir a etapa atual: na Recepção é marcar retirado; nas fases, o "Concluído" do formulário
+    # (/api/fases). Não há outro caminho para avançar (RN-03, T4.2).
+    if etapa == "RECEPCAO":
+        pode_concluir = perfil == PERFIL_RECEPCAO and not arquivado and not em_desvio and not solicitacao.get("retirado_em")
+    else:
+        fase = FASES_POR_ETAPA.get(etapa)
+        tem_saida = em_desvio or bool(await provider.destinos(solicitacao["tipo_exame"], etapa, "AVANCO"))
+        pode_concluir = bool(fase and perfil in fase["concluir"] and not arquivado and tem_saida)
     return {
         **solicitacao,
         "amostras": amostras,
         "acoes": {
-            "pode_concluir": bool(responsavel and proximas),
+            "pode_concluir": pode_concluir,
             "pode_retornar": bool(responsavel and em_desvio),
             "destinos_encaminhamento": destinos if responsavel else [],
         },
     }
-
-
-# --------------------------------------------------------------------------- #
-# UC017 - Concluir etapa com validação                                         #
-# --------------------------------------------------------------------------- #
-async def concluir_etapa(
-    solicitacao_id: int, usuario: Dict[str, Any], ip: Optional[str], provider: SolicitacaoProviderInterface
-) -> Dict[str, Any]:
-    """UC017: avança a solicitação para a próxima etapa do fluxo, se não houver pendências."""
-    solicitacao = await _solicitacao_ou_404(provider, solicitacao_id)
-    etapa = solicitacao["etapa_atual"]
-    if etapa == "RECEPCAO" and solicitacao["status"] != STATUS_ARQUIVADO:
-        # Concluir a Recepção é marcar o material como retirado (MVP: Solicitações de Exames).
-        from .retirada_controller import marcar_retirado
-        await marcar_retirado(solicitacao_id, usuario, ip, provider)
-        return await obter_solicitacao(solicitacao_id, usuario, provider)
-    if solicitacao["status"] == STATUS_ARQUIVADO:
-        raise HTTPException(status_code=409, detail="Solicitação já arquivada.")
-    _exigir_perfil(usuario, PERFIS_POR_ETAPA.get(etapa, set()), f"concluir a etapa {etapa}")
-    if await _esta_em_desvio(provider, solicitacao):
-        raise HTTPException(status_code=409, detail="Solicitação em encaminhamento: use 'retornar' para devolvê-la à etapa de origem.")
-    await _exigir_sem_pendencias(provider, solicitacao_id)
-
-    proximas = await provider.destinos(solicitacao["tipo_exame"], etapa, "AVANCO")
-    if not proximas:
-        raise HTTPException(status_code=409, detail=f"Não há transição configurada a partir de {etapa} para {solicitacao['tipo_exame']}.")
-    destino = proximas[0]
-    status = _status_derivado(destino)
-    agora = _agora()
-    try:
-        await provider.inserir_movimentacao(
-            {
-                "solicitacao_id": solicitacao_id, "tipo": "CONCLUSAO", "etapa_origem": etapa,
-                "etapa_destino": destino, "motivo": None, "usuario": _login(usuario), "agora": agora,
-            }
-        )
-        await provider.atualizar_etapa(solicitacao_id, destino, status, agora)
-        await _gravar(
-            provider, usuario=usuario, ip=ip, acao="CONCLUIR_ETAPA", solicitacao_id=solicitacao_id,
-            anteriores={"etapa_atual": etapa, "status": solicitacao["status"]},
-            novos={"etapa_atual": destino, "status": status},
-        )
-        await provider.commit()
-    except Exception as erro:
-        await provider.rollback()
-        # Padrão de log de erro: ação + tipo da exceção, sem dados da solicitação (RNF007).
-        logger.error("Falha em %s: %s", "CONCLUIR_ETAPA", erro.__class__.__name__)
-        raise
-    return await obter_solicitacao(solicitacao_id, usuario, provider)
 
 
 # --------------------------------------------------------------------------- #
