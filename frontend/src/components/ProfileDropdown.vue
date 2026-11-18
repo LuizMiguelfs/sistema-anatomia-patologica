@@ -7,12 +7,12 @@
     <button v-if="isOpen" class="fixed inset-0 z-10 cursor-default" aria-label="Fechar menu do perfil" @click="isOpen = false" />
     <div v-if="isOpen" class="absolute right-0 z-20 mt-2 w-72 rounded-lg bg-white border border-gray-200 shadow-xl p-4 space-y-3">
       <div>
-        <p class="font-semibold text-gray-900 break-words">{{ auth.user?.displayName?.[0] || auth.user?.username || 'Usuário' }}</p>
+        <p class="font-semibold text-gray-900 break-words">{{ auth.nomeExibicao || 'Usuário' }}</p>
         <p class="text-sm text-gray-500 break-all">{{ auth.user?.username }}</p>
       </div>
       <div class="border-t pt-3 text-sm space-y-1">
         <p class="text-gray-500">Perfil de acesso</p>
-        <p class="font-semibold text-gray-800">{{ roleLabel }}</p>
+        <p class="font-semibold text-gray-800">{{ auth.perfilRotulo ?? 'Não definido' }}</p>
         <p class="text-gray-500 pt-2">Setor</p>
         <p class="text-gray-800">{{ auth.user?.department?.[0] || 'Não informado' }}</p>
       </div>
@@ -25,22 +25,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { UserCircleIcon } from '@heroicons/vue/24/outline';
-import { useAuthStore, type SapRole } from '../stores/auth';
+import { useAuthStore } from '../stores/auth';
 
-const labels: Record<SapRole, string> = {
-  RECEPCAO: 'Recepção', LABORATORIO: 'Laboratório / Técnicos',
-  RESIDENTE: 'Triagem / Residentes', PRECEPTORIA: 'Validação / Preceptoria',
-  CHEFIA: 'Chefia UACAP',
-};
+// O rótulo do perfil vem do store (mesma fonte de Configurações), não de uma lista própria.
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const isOpen = ref(false);
 const leaving = ref(false);
-const roleLabel = computed(() => auth.role ? labels[auth.role] : 'Não definido');
 
 async function handleLogout() {
   leaving.value = true;
