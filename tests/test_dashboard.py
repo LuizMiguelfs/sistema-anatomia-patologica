@@ -50,27 +50,29 @@ def test_endpoint_retorna_resumo_autenticado():
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
-async def test_dashboard_sqlite_com_dados_reais_e_sla_explicito(tmp_path):
+def test_dashboard_sqlite_com_dados_reais_e_sla_explicito(tmp_path, monkeypatch):
+    from alembic import command
+    from alembic.config import Config
+
+    # Banco com o esquema real (migrações), para o painel consultar as mesmas tabelas das telas.
+    dsn = f"sqlite+aiosqlite:///{tmp_path / 'dashboard.db'}"
+    monkeypatch.setenv("SQLITE_DSN", dsn)
+    command.upgrade(Config("alembic.ini"), "head")  # o Alembic roda o próprio loop: fora do teste assíncrono
+    asyncio.run(_conferir_painel(dsn))
+
+
+async def _conferir_painel(dsn: str) -> None:
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
     from src.providers.implementations.dashboard_sqlite_provider import DashboardSqliteProvider
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'dashboard.db'}")
+    engine = create_async_engine(dsn)
     async with engine.begin() as conn:
         await conn.execute(text("""
-            CREATE TABLE solicitacoes_exame (
-                id INTEGER PRIMARY KEY,
-                tipo_exame TEXT, status TEXT, criado_em TEXT, etapa_atual TEXT, ativo INTEGER
-            )
-        """))
-        await conn.execute(text("""
-            CREATE TABLE solicitacao_inconformidades (solicitacao_id INTEGER, situacao TEXT)
-        """))
-        await conn.execute(text("""
-            INSERT INTO solicitacoes_exame(tipo_exame, status, criado_em, etapa_atual, ativo)
-            VALUES ('HP', 'EM_ANDAMENTO', :criado, 'RECEPCAO', 1)
+            INSERT INTO solicitacoes_exame(identificador_interno, solicitacao_aghu, paciente_codigo_aghu, paciente_nome,
+                                           tipo_exame, etapa_atual, status, criado_por, criado_em, atualizado_em)
+            VALUES ('HP-0001/26', '1', '1', 'cifrado', 'HP', 'RECEPCAO', 'EM_ANDAMENTO', 'x', :criado, :criado)
         """), {"criado": (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()})
     try:
         async with async_sessionmaker(engine)() as sess:
@@ -80,6 +82,7 @@ async def test_dashboard_sqlite_com_dados_reais_e_sla_explicito(tmp_path):
             assert sem_sla.operacional.solicitacoes_pendentes == 1
             assert sem_sla.operacional.solicitacoes_atrasadas is None
             assert sem_sla.gerencial.tempo_medio_liberacao_horas is None
+            assert sem_sla.filas.nao_retiradas == 1
 
             com_sla = await DashboardSqliteProvider(sess, {"HP": 4}).obter_resumo()
             assert com_sla.operacional.solicitacoes_atrasadas == 1

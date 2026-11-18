@@ -100,6 +100,14 @@ FASES: List[Dict[str, Any]] = [
 
 FASES_POR_ETAPA: Dict[str, Dict[str, Any]] = {f["etapa"]: f for f in FASES}
 
+#: Fases em que o residente escreve um pré-laudo e o patologista valida e conclui. O valor é o
+#: campo do residente: preenchido num rascunho = a solicitação aguarda o patologista (painel).
+CAMPO_PRE_LAUDO: Dict[str, str] = {
+    "CONGELACAO": "analise_preliminar",
+    "MICROSCOPIA": "pre_laudo",
+    "REVISAO": "pre_laudo",
+}
+
 
 def campos_da_fase(etapa: str, tipo_exame: str) -> List[Dict[str, Any]]:
     """Campos do formulário da fase que se aplicam ao tipo de exame da solicitação."""
