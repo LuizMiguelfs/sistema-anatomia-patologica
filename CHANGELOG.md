@@ -1,5 +1,18 @@
 # Registro de alterações — pacote de refino
 
+## 2026-11-18 — v1.2.0 — Solicitação de exame em todo o sistema, histórico, painel das filas e CI
+
+- **Termo único:** "caso" passa a "solicitação de exame" no código, nas rotas e no banco. A migração `20261118_renomear_solicitacao` só renomeia tabelas, colunas e índices (sem perda de dados) e descarta as tabelas novas vazias que o sistema cria ao subir antes de migrar. `/api/casos` passa a `/api/solicitacoes` (busca em `/api/solicitacoes/busca`). Na trilha de auditoria, os registros novos usam `solicitacao:<id>` e os antigos (`caso:<id>`) continuam aparecendo no histórico.
+- **Avanço só com formulário (RN-03):** sai a rota `concluir-etapa`, que avançava a etapa sem os campos obrigatórios. Uma etapa só avança pela retirada (Recepção) ou pelo Concluído do formulário da fase.
+- **Histórico da solicitação:** o formulário de cada fase mostra o que foi feito, por quem e quando, para todos os perfis.
+- **Trilha de auditoria em português:** toda ação aparece com rótulo legível em Configurações; o filtro de ação vira lista.
+- **Perfil no cabeçalho:** todas as telas mostram o nome e o perfil de quem entrou.
+- **Início:** retrato das filas (não retiradas, pendentes e urgentes por fase, aguardando o patologista), com cada número levando à aba certa. "Aguardando complementação" passa a contar as encaminhadas que ainda não voltaram; "Inconformidades abertas" volta a "Não medido", pois o SAP ainda não registra inconformidades.
+- **Telas antigas removidas:** Pacientes e Casos saem do frontend; `/pacientes` e `/casos` levam ao Início.
+- **Qualidade:** teste da matriz de perfis pela API, testes de componente do formulário da fase (`@vue/test-utils` e `jsdom`, só desenvolvimento) e CI no GitHub Actions (testes, build e auditor em cada PR).
+- **Documentação:** especificação (`01`, `04`, `05`, `07`, `SPEC.md`) e README atualizados com o MVP.
+- Pendentes: formulários reais de cada fase (após a reunião com o setor), aba Arquivados, deploy de demonstração (aguardando aprovação).
+
 ## 2026-11-11 — v1.1.0 — MVP: Solicitações de Exames e fases do setor
 
 - Menu reorganizado: Solicitações de Exames (Não retirados, Retirados, Arquivados em breve), Fase Pré-Analítica (Macroscopia, Congelação, Processamento Técnico, IHQ) e Fase Analítica (Microscopia, Revisão de Lâmina). Pacientes e Casos saem do menu.
