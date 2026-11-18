@@ -46,7 +46,7 @@ function formulario(extra: Partial<Formulario> = {}, editavel: Record<string, bo
 async function montar(resposta: Formulario) {
   obterFormulario.mockResolvedValue(resposta);
   const wrapper = mount(FormularioFase, {
-    props: { show: true, etapa: 'MICROSCOPIA', casoId: 7 },
+    props: { show: true, etapa: 'MICROSCOPIA', solicitacaoId: 7 },
     // Modal usa teleport; a linha do tempo (quando existir) não é o foco aqui.
     global: { stubs: { teleport: true, LinhaDoTempo: true } },
   });

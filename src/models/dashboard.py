@@ -11,9 +11,9 @@ class OrigemDados(str, Enum):
 
 
 class ResumoOperacional(BaseModel):
-    total_casos: int | None = Field(default=None, ge=0)
-    casos_pendentes: int | None = Field(default=None, ge=0)
-    casos_atrasados: int | None = Field(default=None, ge=0)
+    total_solicitacoes: int | None = Field(default=None, ge=0)
+    solicitacoes_pendentes: int | None = Field(default=None, ge=0)
+    solicitacoes_atrasadas: int | None = Field(default=None, ge=0)
     aguardando_complementacao: int | None = Field(default=None, ge=0)
 
 
@@ -34,4 +34,4 @@ class DashboardResumoResponse(BaseModel):
     gerencial: IndicadoresGerenciais
     criterios: dict[str, str] = Field(default_factory=dict)
     prazos_horas_por_tipo: dict[str, int] = Field(default_factory=dict)
-    prazo_cobertura_casos: int = Field(default=0, ge=0)
+    prazo_cobertura_solicitacoes: int = Field(default=0, ge=0)

@@ -69,7 +69,7 @@ def test_filtro_por_data_respeita_o_fuso_de_quem_consulta(ambiente):
     with sqlite3.connect(db_path) as conn:
         conn.execute(
             "INSERT INTO audit_logs (created_at, usuario, categoria, acao, recurso) "
-            "VALUES ('2026-11-06 01:00:00.000000', 'joao.silva', 'NEGOCIO_CLINICO', 'NOTURNO', 'caso:1')"
+            "VALUES ('2026-11-06 01:00:00.000000', 'joao.silva', 'NEGOCIO_CLINICO', 'NOTURNO', 'solicitacao:1')"
         )
     h = _admin(client)
 
@@ -85,11 +85,11 @@ def test_filtro_por_data_respeita_o_fuso_de_quem_consulta(ambiente):
 def test_consulta_paginacao(ambiente):
     client, _ = ambiente
     for i in range(5):
-        _gravar(client, recurso=f"caso:{i}")
+        _gravar(client, recurso=f"solicitacao:{i}")
     h = _admin(client)
     r = client.get("/api/admin/auditoria", params={"limite": 2, "offset": 2}, headers=h).json()
     assert r["total"] == 5 and r["limite"] == 2 and r["offset"] == 2
-    assert [i["recurso"] for i in r["itens"]] == ["caso:2", "caso:1"]
+    assert [i["recurso"] for i in r["itens"]] == ["solicitacao:2", "solicitacao:1"]
 
 
 def test_consulta_filtro_por_data(ambiente):
@@ -125,14 +125,14 @@ def test_nao_existe_rota_de_escrita_na_auditoria(ambiente):
 # ------------------------------------------------------------ histórico (RF021)
 def test_historico_aberto_a_qualquer_usuario_autenticado(ambiente):
     client, db_path = ambiente
-    _gravar(client, recurso="caso:7", acao="REGISTRAR_RECEBIMENTO")
-    _gravar(client, recurso="caso:7", acao="CONCLUIR_MACROSCOPIA")
-    _gravar(client, recurso="caso:8")
-    _gravar(client, recurso="caso:7", categoria="SEGURANCA", acao="EVENTO_DE_ACESSO")
+    _gravar(client, recurso="solicitacao:7", acao="REGISTRAR_RECEBIMENTO")
+    _gravar(client, recurso="solicitacao:7", acao="CONCLUIR_MACROSCOPIA")
+    _gravar(client, recurso="solicitacao:8")
+    _gravar(client, recurso="solicitacao:7", categoria="SEGURANCA", acao="EVENTO_DE_ACESSO")
 
-    assert client.get("/api/auditoria/historico", params={"recurso": "caso:7"}).status_code == 401
+    assert client.get("/api/auditoria/historico", params={"recurso": "solicitacao:7"}).status_code == 401
 
-    r = client.get("/api/auditoria/historico", params={"recurso": "caso:7"}, headers=_h(_token(db_path, ["Users"])))
+    r = client.get("/api/auditoria/historico", params={"recurso": "solicitacao:7"}, headers=_h(_token(db_path, ["Users"])))
     assert r.status_code == 200, r.text
     corpo = r.json()
     assert corpo["total"] == 2  # só NEGOCIO_CLINICO, só o recurso pedido
@@ -149,6 +149,6 @@ def test_historico_valida_formato_do_recurso(ambiente):
 
 def test_historico_nao_aceita_prefixo(ambiente):
     client, db_path = ambiente
-    _gravar(client, recurso="caso:1")
-    r = client.get("/api/auditoria/historico", params={"recurso": "caso:*"}, headers=_h(_token(db_path, ["Users"])))
+    _gravar(client, recurso="solicitacao:1")
+    r = client.get("/api/auditoria/historico", params={"recurso": "solicitacao:*"}, headers=_h(_token(db_path, ["Users"])))
     assert r.status_code == 200 and r.json()["total"] == 0

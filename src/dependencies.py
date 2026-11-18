@@ -70,18 +70,18 @@ def get_dashboard_provider(
     return DashboardSqliteProvider(session, prazos=settings.prazos_exame_horas())
 
 
-# 6. Casos (Membro 4): casos no banco local e leitura de solicitações no AGHU.
-from .providers.interfaces.caso_provider_interface import CasoProviderInterface
-from .providers.implementations.caso_sqlite_provider import CasoSqliteProvider
+# 6. Solicitações (Membro 4): solicitações no banco local e leitura de solicitações no AGHU.
+from .providers.interfaces.solicitacao_provider_interface import SolicitacaoProviderInterface
+from .providers.implementations.solicitacao_sqlite_provider import SolicitacaoSqliteProvider
 from .providers.interfaces.aghu_solicitacao_provider_interface import AghuSolicitacaoProviderInterface
 from .providers.implementations.aghu_solicitacao_postgres_provider import AghuSolicitacaoPostgresProvider
 
 
-def get_caso_provider(
+def get_solicitacao_provider(
     session: AsyncSession = Depends(get_app_db_session),
-) -> CasoProviderInterface:
-    """Provedor dos casos (banco local da aplicação)."""
-    return CasoSqliteProvider(session=session)
+) -> SolicitacaoProviderInterface:
+    """Provedor das solicitações (banco local da aplicação)."""
+    return SolicitacaoSqliteProvider(session=session)
 
 
 from .providers.implementations.aghu_solicitacao_simulado_provider import AghuSolicitacaoSimuladoProvider

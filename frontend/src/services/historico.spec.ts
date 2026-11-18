@@ -7,7 +7,7 @@ import { detalheDoEvento, listarHistorico, montarLinhaDoTempo, type EventoHistor
 
 function evento(id: number, created_at: string, acao: string, extra: Partial<EventoHistorico> = {}): EventoHistorico {
   return {
-    id, created_at, acao, usuario: 'demo.residente', categoria: 'NEGOCIO_CLINICO', recurso: 'caso:7',
+    id, created_at, acao, usuario: 'demo.residente', categoria: 'NEGOCIO_CLINICO', recurso: 'solicitacao:7',
     dados_anteriores: null, dados_novos: null, ...extra,
   };
 }
@@ -18,7 +18,7 @@ describe('services/historico · linha do tempo', () => {
   it('consulta a trilha pelo recurso da solicitação', async () => {
     get.mockResolvedValue({ data: { total: 0, limite: 200, offset: 0, itens: [] } });
     await listarHistorico(7);
-    expect(get).toHaveBeenCalledWith('/api/auditoria/historico', { params: { recurso: 'caso:7', limite: 200 } });
+    expect(get).toHaveBeenCalledWith('/api/auditoria/historico', { params: { recurso: 'solicitacao:7', limite: 200 } });
   });
 
   it('põe os eventos em ordem: entrada, retirada, rascunho, conclusão', () => {
@@ -27,7 +27,7 @@ describe('services/historico · linha do tempo', () => {
       evento(4, '2026-11-17T15:00:00Z', 'CONCLUIR_MACROSCOPIA', { dados_novos: { etapa_atual: 'PROCESSAMENTO' } }),
       evento(3, '2026-11-17T14:00:00Z', 'SALVAR_MACROSCOPIA'),
       evento(2, '2026-11-17T13:00:00Z', 'MARCAR_RETIRADO', { usuario: 'demo.recepcao', dados_novos: { etapa_atual: 'MACROSCOPIA' } }),
-      evento(1, '2026-11-17T12:00:00Z', 'ABRIR_CASO', { dados_novos: { identificador_interno: 'HP-0007/26' } }),
+      evento(1, '2026-11-17T12:00:00Z', 'ABRIR_SOLICITACAO', { dados_novos: { identificador_interno: 'HP-0007/26' } }),
     ]);
     expect(itens.map((i) => i.titulo)).toEqual([
       'Entrada da solicitação no SAP',
@@ -47,6 +47,17 @@ describe('services/historico · linha do tempo', () => {
       evento(8, '2026-11-17T12:00:00Z', 'SALVAR_PROCESSAMENTO'),
     ]);
     expect(itens.map((i) => i.id)).toEqual([8, 9]);
+  });
+
+  it('registros anteriores à renomeação (ABRIR_CASO, ENCAMINHAR_CASO) aparecem iguais aos novos', () => {
+    const itens = montarLinhaDoTempo([
+      evento(2, '2026-11-01T13:00:00Z', 'ENCAMINHAR_CASO', { recurso: 'caso:7', dados_novos: { etapa_atual: 'IHQ' } }),
+      evento(1, '2026-11-01T12:00:00Z', 'ABRIR_CASO', { recurso: 'caso:7', dados_novos: { identificador_interno: 'HP-0007/26' } }),
+    ]);
+    expect(itens.map((i) => [i.titulo, i.detalhe])).toEqual([
+      ['Entrada da solicitação no SAP', 'Código interno HP-0007/26'],
+      ['Encaminhada a outra etapa', 'Seguiu para IHQ'],
+    ]);
   });
 
   it('desfazer retirada diz de onde voltou', () => {

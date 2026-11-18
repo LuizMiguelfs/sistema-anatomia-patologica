@@ -16,8 +16,19 @@ from fastapi import HTTPException, status
 from ..helpers.crypto_helper import decifrar_campos
 from ..providers.interfaces.auditoria_provider_interface import AuditoriaProviderInterface
 
-#: Categoria exibida no histórico de um caso/recurso, aberto a qualquer usuário autenticado.
+#: Categoria exibida no histórico de uma solicitação/recurso, aberto a qualquer usuário autenticado.
 CATEGORIA_HISTORICO = "NEGOCIO_CLINICO"
+
+#: Tipos de recurso que mudaram de nome. A trilha é imutável: registros antigos guardam o nome
+#: antigo (ex.: "caso:12" antes da T4.1), e o histórico do recurso mostra os dois.
+NOMES_ANTIGOS_DE_RECURSO = {"solicitacao": "caso"}
+
+
+def recurso_legado(recurso: str) -> Optional[str]:
+    """Nome antigo do recurso na trilha ("solicitacao:12" → "caso:12") ou None."""
+    tipo, separador, codigo = recurso.partition(":")
+    antigo = NOMES_ANTIGOS_DE_RECURSO.get(tipo)
+    return f"{antigo}:{codigo}" if antigo and separador and codigo else None
 
 
 def _json_ou_texto(valor: Optional[str]) -> Any:
@@ -95,10 +106,13 @@ async def historico_recurso(
     offset: int = 0,
 ) -> Dict[str, Any]:
     """
-    Linha do tempo de um recurso (ex.: caso:123) para qualquer usuário autenticado (RF021).
+    Linha do tempo de um recurso (ex.: solicitacao:123) para qualquer usuário autenticado (RF021).
     Mostra apenas eventos NEGOCIO_CLINICO e não expõe o IP de origem.
     """
     recurso = recurso.strip()
-    total = await provider.contar_historico(recurso, CATEGORIA_HISTORICO)
-    registros = await provider.listar_historico(recurso, CATEGORIA_HISTORICO, limite=limite, offset=offset)
+    legado = recurso_legado(recurso)
+    total = await provider.contar_historico(recurso, CATEGORIA_HISTORICO, recurso_legado=legado)
+    registros = await provider.listar_historico(
+        recurso, CATEGORIA_HISTORICO, limite=limite, offset=offset, recurso_legado=legado
+    )
     return _pagina(total, limite, offset, registros)

@@ -9,7 +9,7 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 
 from src.auth.auth import auth_handler
-from src.controllers import caso_controller
+from src.controllers import solicitacao_controller
 from src.dependencies import get_aghu_solicitacao_provider
 from src.main import app
 from src.providers.interfaces.aghu_solicitacao_provider_interface import AghuSolicitacaoProviderInterface
@@ -53,7 +53,7 @@ def api(tmp_path, monkeypatch):
     db = tmp_path / "app.db"
     monkeypatch.setenv("SQLITE_DSN", f"sqlite+aiosqlite:///{db}")
     command.upgrade(Config("alembic.ini"), "head")
-    monkeypatch.setattr(caso_controller, "_ano_local", lambda: 2026)
+    monkeypatch.setattr(solicitacao_controller, "_ano_local", lambda: 2026)
     app.dependency_overrides[get_aghu_solicitacao_provider] = lambda: AghuFalso()
     try:
         with TestClient(app) as client:
@@ -64,7 +64,7 @@ def api(tmp_path, monkeypatch):
                                  (user, role, datetime.now(timezone.utc).isoformat()))
             ids = {}
             for numero in ("101", "102", "103"):
-                r = client.post("/api/casos", json={"solicitacao_aghu": numero}, headers=REC)
+                r = client.post("/api/solicitacoes", json={"solicitacao_aghu": numero}, headers=REC)
                 assert r.status_code == 201, r.text
                 ids[numero] = r.json()["id"]
             yield client, db, ids
@@ -133,9 +133,9 @@ def test_fila_mostra_so_a_fase_atual(api):
 
 def test_salvar_concluir_obrigatorios_e_perfis(api):
     client, db, ids = api
-    caso = ids["101"]
-    client.post(f"/api/solicitacoes/{caso}/retirar", headers=REC)
-    url = f"/api/fases/MACROSCOPIA/solicitacoes/{caso}"
+    solicitacao = ids["101"]
+    client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC)
+    url = f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}"
 
     assert client.put(url, json={"dados": {"qtd_fragmentos": 2}}, headers=LAB).status_code == 403
     assert client.put(url, json={"dados": {"campo_que_nao_existe": "x"}}, headers=RES).status_code == 422
@@ -162,24 +162,24 @@ def test_salvar_concluir_obrigatorios_e_perfis(api):
     # Passados 6 dias, sai da fila e não aceita mais edição.
     antigo = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     with sqlite3.connect(db) as conn:
-        conn.execute("UPDATE caso_fases SET concluido_em = ? WHERE caso_id = ?", (antigo, caso))
+        conn.execute("UPDATE solicitacao_fases SET concluido_em = ? WHERE solicitacao_id = ?", (antigo, solicitacao))
     assert client.get("/api/fases/MACROSCOPIA/fila", headers=RES).json()["total"] == 0
     assert client.put(url, json={"dados": {"observacoes": "tarde"}}, headers=RES).status_code == 409
 
     with sqlite3.connect(db) as conn:
-        acoes = [r[0] for r in conn.execute("SELECT acao FROM audit_logs WHERE recurso = ?", (f"caso:{caso}",))]
+        acoes = [r[0] for r in conn.execute("SELECT acao FROM audit_logs WHERE recurso = ?", (f"solicitacao:{solicitacao}",))]
     assert "SALVAR_MACROSCOPIA" in acoes and "CONCLUIR_MACROSCOPIA" in acoes and "EDITAR_CONCLUIDA_MACROSCOPIA" in acoes
 
 
 def test_microscopia_residente_preenche_e_patologista_conclui(api):
     client, _, ids = api
-    caso = ids["101"]
-    client.post(f"/api/solicitacoes/{caso}/retirar", headers=REC)
-    client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}/concluir", headers=RES, json={"dados": {
+    solicitacao = ids["101"]
+    client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC)
+    client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}/concluir", headers=RES, json={"dados": {
         "descricao_macroscopica": "F", "qtd_fragmentos": 1, "qtd_cassetes": 1, "laudo_macroscopico": "L"}})
-    client.post(f"/api/fases/PROCESSAMENTO/solicitacoes/{caso}/concluir", headers=LAB, json={"dados": {
+    client.post(f"/api/fases/PROCESSAMENTO/solicitacoes/{solicitacao}/concluir", headers=LAB, json={"dados": {
         "inicio": "Histotécnico", "qtd_blocos": 1, "qtd_laminas": 2}})
-    url = f"/api/fases/MICROSCOPIA/solicitacoes/{caso}"
+    url = f"/api/fases/MICROSCOPIA/solicitacoes/{solicitacao}"
 
     r = client.put(url, json={"dados": {"pre_laudo": "Pré-laudo", "diagnostico": "tentativa do residente"}}, headers=RES)
     assert r.status_code == 200 and r.json()["dados"]["diagnostico"] is None  # campo só do patologista
@@ -196,17 +196,17 @@ def test_microscopia_residente_preenche_e_patologista_conclui(api):
 
 def test_ihq_pedida_na_microscopia_volta_para_microscopia(api):
     client, _, ids = api
-    caso = ids["103"]
-    client.post(f"/api/solicitacoes/{caso}/retirar", headers=REC)
-    client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}/concluir", headers=RES, json={"dados": {
+    solicitacao = ids["103"]
+    client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC)
+    client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}/concluir", headers=RES, json={"dados": {
         "descricao_macroscopica": "F", "qtd_fragmentos": 1, "qtd_cassetes": 1, "laudo_macroscopico": "L"}})
-    client.post(f"/api/fases/PROCESSAMENTO/solicitacoes/{caso}/concluir", headers=LAB, json={"dados": {
+    client.post(f"/api/fases/PROCESSAMENTO/solicitacoes/{solicitacao}/concluir", headers=LAB, json={"dados": {
         "inicio": "Preparo manual", "qtd_blocos": 1, "qtd_laminas": 1}})
-    r = client.post(f"/api/casos/{caso}/encaminhar", json={"destino": "IHQ", "motivo": "painel"}, headers=PAT)
+    r = client.post(f"/api/solicitacoes/{solicitacao}/encaminhar", json={"destino": "IHQ", "motivo": "painel"}, headers=PAT)
     assert r.status_code == 200 and r.json()["etapa_atual"] == "IHQ"
 
     assert [i["solicitacao_aghu"] for i in client.get("/api/fases/IHQ/fila", headers=LAB).json()["items"]] == ["103"]
-    r = client.post(f"/api/fases/IHQ/solicitacoes/{caso}/concluir", headers=LAB, json={"dados": {
+    r = client.post(f"/api/fases/IHQ/solicitacoes/{solicitacao}/concluir", headers=LAB, json={"dados": {
         "marcadores": "CK7, CK20", "qtd_laminas": 2, "resultado": "Laudo da IHQ"}})
     assert r.status_code == 200 and r.json()["solicitacao"]["etapa_atual"] == "MICROSCOPIA"
 
@@ -223,25 +223,54 @@ def test_historico_da_solicitacao_para_todos_os_perfis(api):
     """T2.1: a linha do tempo (trilha NEGOCIO_CLINICO) mostra entrada, retirada, rascunho e
     conclusão, para qualquer perfil, sem IP de origem."""
     client, _, ids = api
-    caso = ids["101"]
-    assert client.post(f"/api/solicitacoes/{caso}/retirar", headers=REC).status_code == 200
+    solicitacao = ids["101"]
+    assert client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC).status_code == 200
     rascunho = {"dados": {"descricao_macroscopica": "Fragmento fictício"}}
-    assert client.put(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}", json=rascunho, headers=RES).status_code == 200
-    form = client.get(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}", headers=RES).json()
+    assert client.put(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}", json=rascunho, headers=RES).status_code == 200
+    form = client.get(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}", headers=RES).json()
     completo = {c["nome"]: (1 if c["tipo"] == "numero" else True if c["tipo"] == "sim_nao"
                             else (c.get("opcoes") or ["x"])[0] if c["tipo"] == "opcao" else "Texto fictício")
                 for c in form["campos"]}
-    r = client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{caso}/concluir", json={"dados": completo}, headers=RES)
+    r = client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}/concluir", json={"dados": completo}, headers=RES)
     assert r.status_code == 200, r.text
 
     for cabecalho in (REC, LAB, RES, PAT, CHE):
-        h = client.get("/api/auditoria/historico", params={"recurso": f"caso:{caso}"}, headers=cabecalho)
+        h = client.get("/api/auditoria/historico", params={"recurso": f"solicitacao:{solicitacao}"}, headers=cabecalho)
         assert h.status_code == 200, h.text
         itens = h.json()["itens"]
         # A API devolve do mais recente para o mais antigo.
         assert [i["acao"] for i in reversed(itens)] == [
-            "ABRIR_CASO", "MARCAR_RETIRADO", "SALVAR_MACROSCOPIA", "CONCLUIR_MACROSCOPIA",
+            "ABRIR_SOLICITACAO", "MARCAR_RETIRADO", "SALVAR_MACROSCOPIA", "CONCLUIR_MACROSCOPIA",
         ]
         assert [i["usuario"] for i in reversed(itens)] == ["ana.recepcao", "ana.recepcao", "caio.res", "caio.res"]
         assert all("ip_origem" not in i for i in itens)
-    assert client.get("/api/auditoria/historico", params={"recurso": f"caso:{caso}"}).status_code == 401
+    assert client.get("/api/auditoria/historico", params={"recurso": f"solicitacao:{solicitacao}"}).status_code == 401
+
+
+def test_historico_le_os_registros_antigos_com_recurso_caso(api):
+    """T4.1: a trilha é imutável; registros gravados antes da renomeação ("caso:<id>", ABRIR_CASO)
+    continuam aparecendo no histórico da solicitação, junto com os novos ("solicitacao:<id>")."""
+    client, db, ids = api
+    sid = ids["103"]
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "INSERT INTO audit_logs (created_at, usuario, categoria, acao, recurso) VALUES (?, ?, ?, ?, ?)",
+            ("2026-01-01 10:00:00", "registro.antigo", "NEGOCIO_CLINICO", "ABRIR_CASO", f"caso:{sid}"),
+        )
+        conn.execute(  # de outra solicitação: não pode aparecer
+            "INSERT INTO audit_logs (created_at, usuario, categoria, acao, recurso) VALUES (?, ?, ?, ?, ?)",
+            ("2026-01-01 10:00:00", "registro.antigo", "NEGOCIO_CLINICO", "ABRIR_CASO", f"caso:{sid}0"),
+        )
+    h = client.get("/api/auditoria/historico", params={"recurso": f"solicitacao:{sid}"}, headers=CHE).json()
+    assert h["total"] == 2
+    assert [(i["acao"], i["recurso"]) for i in h["itens"]] == [
+        ("ABRIR_SOLICITACAO", f"solicitacao:{sid}"), ("ABRIR_CASO", f"caso:{sid}"),
+    ]
+
+
+def test_recurso_legado():
+    from src.controllers.auditoria_controller import recurso_legado
+    assert recurso_legado("solicitacao:12") == "caso:12"
+    assert recurso_legado("paciente:12") is None
+    assert recurso_legado("solicitacao:") is None
+

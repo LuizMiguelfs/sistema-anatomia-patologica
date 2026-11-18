@@ -14,7 +14,7 @@ from src.resources.database import Base
 from src.models.audit_log import AuditLog
 from src.models.authorized_user import AuthorizedUser
 from src.models.refresh_token import RefreshToken
-from src.models import caso  # noqa: F401  (tabelas do módulo de casos)
+from src.models import solicitacao  # noqa: F401  (tabelas do módulo de solicitações)
 
 config = context.config
 if config.config_file_name:

@@ -22,10 +22,10 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.config import settings
-from src.controllers import caso_controller, fase_controller, solicitacao_controller
+from src.controllers import fase_controller, retirada_controller, solicitacao_controller
 from src.models.authorized_user import AuthorizedUser
 from src.providers.implementations.aghu_solicitacao_simulado_provider import AghuSolicitacaoSimuladoProvider
-from src.providers.implementations.caso_sqlite_provider import CasoSqliteProvider
+from src.providers.implementations.solicitacao_sqlite_provider import SolicitacaoSqliteProvider
 
 #: Usuários de demonstração (login -> perfil).
 USUARIOS = {
@@ -69,91 +69,91 @@ async def _usuarios(session) -> None:
     await session.commit()
 
 
-async def _abrir_todas(provider: CasoSqliteProvider, aghu: AghuSolicitacaoSimuladoProvider) -> List[Dict[str, Any]]:
+async def _abrir_todas(provider: SolicitacaoSqliteProvider, aghu: AghuSolicitacaoSimuladoProvider) -> List[Dict[str, Any]]:
     """Abre todas as solicitações fictícias (recebidas), como a Recepção faria."""
-    casos = []
+    solicitacoes = []
     for numero in aghu.listar_numeros():
-        casos.append(await caso_controller.abrir_caso(numero, REC, "127.0.0.1", provider, aghu))
-    return casos
+        solicitacoes.append(await solicitacao_controller.abrir_solicitacao(numero, REC, "127.0.0.1", provider, aghu))
+    return solicitacoes
 
 
-async def _datas_de_recebimento(session, casos: List[Dict[str, Any]]) -> None:
+async def _datas_de_recebimento(session, solicitacoes: List[Dict[str, Any]]) -> None:
     """Espalha o recebimento pelos últimos 4 dias, para a ordem das filas ficar realista."""
     inicio = datetime.now(timezone.utc) - timedelta(days=4)
-    passo = timedelta(days=4) / max(len(casos), 1)
-    for i, caso in enumerate(casos):
+    passo = timedelta(days=4) / max(len(solicitacoes), 1)
+    for i, solicitacao in enumerate(solicitacoes):
         quando = (inicio + passo * i).isoformat()
-        await session.execute(text("UPDATE casos SET criado_em = :q WHERE id = :id"), {"q": quando, "id": caso["id"]})
+        await session.execute(text("UPDATE solicitacoes_exame SET criado_em = :q WHERE id = :id"), {"q": quando, "id": solicitacao["id"]})
         await session.execute(
-            text("UPDATE caso_movimentacoes SET criado_em = :q WHERE caso_id = :id AND tipo = 'ABERTURA'"),
-            {"q": quando, "id": caso["id"]},
+            text("UPDATE solicitacao_movimentacoes SET criado_em = :q WHERE solicitacao_id = :id AND tipo = 'ABERTURA'"),
+            {"q": quando, "id": solicitacao["id"]},
         )
     await session.commit()
 
 
-async def _avancar(provider: CasoSqliteProvider, casos: List[Dict[str, Any]]) -> None:
+async def _avancar(provider: SolicitacaoSqliteProvider, solicitacoes: List[Dict[str, Any]]) -> None:
     """Leva parte das solicitações por algumas fases, deixando pendências em todas as filas."""
     por_tipo: Dict[str, List[Dict[str, Any]]] = {}
-    for caso in casos:
-        por_tipo.setdefault(caso["tipo_exame"], []).append(caso)
+    for solicitacao in solicitacoes:
+        por_tipo.setdefault(solicitacao["tipo_exame"], []).append(solicitacao)
 
-    async def retirar(caso):
-        await solicitacao_controller.marcar_retirado(caso["id"], REC, "127.0.0.1", provider)
+    async def retirar(solicitacao):
+        await retirada_controller.marcar_retirado(solicitacao["id"], REC, "127.0.0.1", provider)
 
-    async def concluir(etapa, caso, usuario, dados):
-        await fase_controller.concluir_fase(etapa, caso["id"], dados, usuario, "127.0.0.1", provider)
+    async def concluir(etapa, solicitacao, usuario, dados):
+        await fase_controller.concluir_fase(etapa, solicitacao["id"], dados, usuario, "127.0.0.1", provider)
 
-    async def salvar(etapa, caso, usuario, dados):
-        await fase_controller.salvar_fase(etapa, caso["id"], dados, usuario, "127.0.0.1", provider)
+    async def salvar(etapa, solicitacao, usuario, dados):
+        await fase_controller.salvar_fase(etapa, solicitacao["id"], dados, usuario, "127.0.0.1", provider)
 
     # HP: 5 ficam em "Não retirados"; as demais se espalham por Macroscopia, Processamento e Microscopia.
     hp = por_tipo.get("HP", [])
-    for i, caso in enumerate(hp[5:]):
-        await retirar(caso)
+    for i, solicitacao in enumerate(hp[5:]):
+        await retirar(solicitacao)
         if i % 6 == 0:
             continue  # Macroscopia pendente, sem nada salvo
         if i % 6 == 1:
-            await salvar("MACROSCOPIA", caso, RES, {"descricao_macroscopica": MACRO["descricao_macroscopica"]})
+            await salvar("MACROSCOPIA", solicitacao, RES, {"descricao_macroscopica": MACRO["descricao_macroscopica"]})
             continue  # Macroscopia com rascunho
-        await concluir("MACROSCOPIA", caso, RES, MACRO)
+        await concluir("MACROSCOPIA", solicitacao, RES, MACRO)
         if i % 6 == 2:
             continue  # Processamento pendente
-        await concluir("PROCESSAMENTO", caso, LAB, PROC_HP)
+        await concluir("PROCESSAMENTO", solicitacao, LAB, PROC_HP)
         if i % 6 == 3:
             continue  # Microscopia pendente
         if i % 6 == 4:
-            await salvar("MICROSCOPIA", caso, RES, {"pre_laudo": MICRO["pre_laudo"]})
+            await salvar("MICROSCOPIA", solicitacao, RES, {"pre_laudo": MICRO["pre_laudo"]})
             continue  # pré-laudo salvo, aguardando o patologista
-        await concluir("MICROSCOPIA", caso, PAT, MICRO)  # arquivada
+        await concluir("MICROSCOPIA", solicitacao, PAT, MICRO)  # arquivada
 
     # Uma HP na Microscopia com IHQ pedida (encaminhamento): aparece na fila da IHQ.
     micro_pendentes = [c for c in hp[5:] if (await provider.buscar_por_id(c["id"]))["etapa_atual"] == "MICROSCOPIA"]
     if micro_pendentes:
-        await caso_controller.encaminhar_caso(
+        await solicitacao_controller.encaminhar_solicitacao(
             micro_pendentes[0]["id"], "IHQ", "Painel imuno-histoquímico para definição diagnóstica", PAT, "127.0.0.1", provider,
         )
 
     # Congelação: 1 em "Não retirados" (urgente), 2 pendentes, 1 concluída.
     co = por_tipo.get("CO", [])
-    for i, caso in enumerate(co[1:]):
-        await retirar(caso)
+    for i, solicitacao in enumerate(co[1:]):
+        await retirar(solicitacao)
         if i == 2:
-            await concluir("CONGELACAO", caso, PAT, {
+            await concluir("CONGELACAO", solicitacao, PAT, {
                 "analise_preliminar": "Nódulo firme, esbranquiçado, 1,5 cm.",
                 "resultado": "Negativo para malignidade na amostra examinada.", "bloco_avisado": True,
             })
 
     # Citologia: 1 de cada em "Não retirados"; as demais no Processamento ou na Microscopia.
     for tipo in ("CG", "CCV"):
-        for i, caso in enumerate(por_tipo.get(tipo, [])[1:]):
-            await retirar(caso)
+        for i, solicitacao in enumerate(por_tipo.get(tipo, [])[1:]):
+            await retirar(solicitacao)
             if i % 2 == 1:
-                await concluir("PROCESSAMENTO", caso, LAB, PROC_CITO)
+                await concluir("PROCESSAMENTO", solicitacao, LAB, PROC_CITO)
 
     # IHQ e Revisão de Lâmina: 1 de cada em "Não retirados"; as demais nas suas filas.
     for tipo in ("IHQ", "RL"):
-        for caso in por_tipo.get(tipo, [])[1:]:
-            await retirar(caso)
+        for solicitacao in por_tipo.get(tipo, [])[1:]:
+            await retirar(solicitacao)
 
 
 def main() -> None:
@@ -176,16 +176,16 @@ async def _carga(dsn: str) -> None:
     fabrica = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with fabrica() as session:
-            total = (await session.execute(text("SELECT COUNT(*) FROM casos"))).scalar()
+            total = (await session.execute(text("SELECT COUNT(*) FROM solicitacoes_exame"))).scalar()
             if total:
                 raise SystemExit("O banco já tem solicitações. Para recomeçar, apague data/app.db e rode de novo.")
             await _usuarios(session)
-            provider = CasoSqliteProvider(session)
+            provider = SolicitacaoSqliteProvider(session)
             aghu = AghuSolicitacaoSimuladoProvider(settings.AGHU_SIMULADO_PATH)
-            casos = await _abrir_todas(provider, aghu)
-            await _datas_de_recebimento(session, casos)
-            await _avancar(provider, casos)
-        print(f"Carga concluída: {len(casos)} solicitações fictícias e {len(USUARIOS)} usuários de demonstração.")
+            solicitacoes = await _abrir_todas(provider, aghu)
+            await _datas_de_recebimento(session, solicitacoes)
+            await _avancar(provider, solicitacoes)
+        print(f"Carga concluída: {len(solicitacoes)} solicitações fictícias e {len(USUARIOS)} usuários de demonstração.")
         print("Usuários: " + ", ".join(f"{u} ({p})" for u, p in USUARIOS.items()))
     finally:
         await engine.dispose()

@@ -8,7 +8,7 @@
 | `Home.vue` | `/` | `GET /api/dashboard/resumo` | Indicadores do banco local com dicionário de KPIs; não medidos retornam `null` |
 | `Configuracoes.vue` | `/configuracoes` | `/api/admin/usuarios`, `/api/admin/ad-user-search/{login}`, `/api/admin/auditoria` | Perfil do usuário (todos); gestão de usuários (Chefia); trilha de auditoria (Chefia e TI) |
 
-As telas antigas `Pacientes.vue` e `Casos.vue` saíram do frontend; `/pacientes` e `/casos` levam ao Início. As APIs `/api/pacientes` (somente consulta) e `/api/casos` continuam.
+As telas antigas `Pacientes.vue` e `Casos.vue` saíram do frontend; `/pacientes` e `/casos` levam ao Início. A API `/api/pacientes` (somente consulta) continua. A antiga `/api/casos` passou a `/api/solicitacoes` (T4.1): `GET /api/solicitacoes` lista Não retirados/Retirados, `GET /api/solicitacoes/busca` é a busca com filtros de etapa e status, `POST /api/solicitacoes` abre a solicitação do AGHU e `/api/solicitacoes/{id}/...` traz o detalhe, a retirada, o encaminhamento, o retorno e a conferência com o AGHU.
 
 O backend ainda expõe `GET /api/auditoria/historico`, autenticado, para histórico de um recurso. A documentação interativa de endpoints é fornecida pela aplicação em `/docs`.
 

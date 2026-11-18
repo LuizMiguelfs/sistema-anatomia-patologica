@@ -43,7 +43,7 @@ class Settings:
     SESSION_REFRESH_HOURS = int(os.getenv("SESSION_REFRESH_HOURS", "12"))
     # Chave AES-256 dos dados sensíveis gravados pelo SAP (32 bytes em base64).
     SAP_DATA_KEY = os.getenv("SAP_DATA_KEY", "")
-    # Horas corridas DESDE ABERTURA DO CASO, apenas se a Chefia validar o critério.
+    # Horas corridas DESDE A ABERTURA DA SOLICITAÇÃO, apenas se a Chefia validar o critério.
     SAP_PRAZOS_EXAME_HORAS = os.getenv("SAP_PRAZOS_EXAME_HORAS", "{}")
 
     @classmethod

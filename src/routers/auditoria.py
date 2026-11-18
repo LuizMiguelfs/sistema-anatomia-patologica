@@ -1,5 +1,5 @@
 """
-Histórico de um recurso (RF021): linha do tempo das alterações de um caso, amostra etc.
+Histórico de um recurso (RF021): linha do tempo das alterações de uma solicitação, amostra etc.
 Aberto a qualquer usuário autenticado; mostra só eventos NEGOCIO_CLINICO e não expõe IP.
 A consulta administrativa completa da trilha fica em `admin.py` (/api/admin/auditoria).
 """
@@ -45,7 +45,7 @@ class PaginaHistorico(BaseModel):
 @router.get("/historico", response_model=PaginaHistorico)
 async def historico(
     recurso: str = Query(..., min_length=3, max_length=200, pattern=r"^[A-Za-z_]+:.+$",
-                         description="Recurso no formato tipo:identificador, ex.: caso:123"),
+                         description="Recurso no formato tipo:identificador, ex.: solicitacao:123"),
     limite: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     provider: AuditoriaProviderInterface = Depends(get_auditoria_provider),

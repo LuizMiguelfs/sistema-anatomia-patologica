@@ -33,7 +33,7 @@ Para manter a integridade sistêmica, os assistentes de IA devem aderir às segu
 - **JSDoc/TSDoc** no front (`.ts` e `<script setup>`); no backend, docstrings (AGENTS.md).
 - **try/except** no backend com log padronizado: ação + tipo da exceção (`logger.error("Falha em %s: %s", acao, erro.__class__.__name__)`), sem dados do registro (RNF007).
 - **Testes**: no front, `.spec.ts` (Vitest) para cada novo service ou store; no backend (Python), `pytest` em `tests/` para cada novo controller ou router.
-- **Exclusão lógica**: `deleted_at` (ex.: `refresh_tokens`, pacientes CSV) ou situação `active`/`ativo` (usuários, casos).
+- **Exclusão lógica**: `deleted_at` (ex.: `refresh_tokens`, pacientes CSV) ou situação `active`/`ativo` (usuários, solicitações de exame).
 
 ## 5. Camadas
 
@@ -79,7 +79,7 @@ uv run uvicorn src.main:app --host 127.0.0.1 --port 8000
 
 ## 8. Responsabilidade dos módulos
 
-Autenticação (1), auditoria/admin (2), pacientes (3), fluxo de casos (4), dashboard (5) e integração/infraestrutura/documentação (6). Os módulos 4 e 5 devem informar suas rotas e regras de negócio antes da homologação final.
+Autenticação (1), auditoria/admin (2), pacientes (3), fluxo das solicitações de exame (4), dashboard (5) e integração/infraestrutura/documentação (6). Os módulos 4 e 5 devem informar suas rotas e regras de negócio antes da homologação final.
 
 ## 9. Dependências externas documentadas
 

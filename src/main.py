@@ -13,8 +13,8 @@ load_dotenv()
 from .resources.database import DatabaseManager, Base
 # Importa o modelo de auditoria para registrá-lo no metadata (create_all) e a proteção de imutabilidade.
 from .models.audit_log import instalar_protecao_auditoria
-# Registra as tabelas do módulo de casos no metadata (create_all em desenvolvimento).
-from .models import caso as _modelos_caso  # noqa: F401
+# Registra as tabelas do módulo de solicitações no metadata (create_all em desenvolvimento).
+from .models import solicitacao as _modelos_solicitacao  # noqa: F401
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -119,7 +119,7 @@ if os.path.exists(assets_dir):
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Roteadores da API
-from .routers import paciente, auth, admin, health, dashboard, auditoria, usuarios, caso, solicitacao, fase
+from .routers import paciente, auth, admin, health, dashboard, auditoria, usuarios, solicitacao, retirada, fase
 app.include_router(health.router)
 app.include_router(paciente.router)
 app.include_router(auth.router)
@@ -127,8 +127,8 @@ app.include_router(admin.router)
 app.include_router(dashboard.router)
 app.include_router(auditoria.router)
 app.include_router(usuarios.router)
-app.include_router(caso.router)
 app.include_router(solicitacao.router)
+app.include_router(retirada.router)
 app.include_router(fase.router)
 
 @app.get("/{full_path:path}", response_model=None)

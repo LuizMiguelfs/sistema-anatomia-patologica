@@ -1,7 +1,7 @@
 <!--
   Formulário de uma fase para uma solicitação (MVP).
 
-  Props: `show`, `etapa`, `casoId`. Eventos: `close` e `alterado` (salvou ou concluiu).
+  Props: `show`, `etapa`, `solicitacaoId`. Eventos: `close` e `alterado` (salvou ou concluiu).
   - Salvar: grava sem exigir obrigatórios.
   - Concluído: confere os obrigatórios (mostra os que faltam), pede confirmação e envia a
     solicitação para a próxima fase.
@@ -112,7 +112,7 @@
       <p class="text-xs text-gray-500">* Obrigatório para concluir. Formulário provisório: os campos finais serão definidos com o setor.</p>
 
       <!-- Quem fez o quê e quando (todos os perfis veem) -->
-      <LinhaDoTempo v-if="casoId" :solicitacao-id="casoId" :versao="versaoHistorico" />
+      <LinhaDoTempo v-if="solicitacaoId" :solicitacao-id="solicitacaoId" :versao="versaoHistorico" />
     </div>
 
     <template #footer>
@@ -153,7 +153,7 @@ import { formatarDataHora, mensagemErro } from '../services/solicitacoes';
 const props = defineProps({
   show: { type: Boolean, default: false },
   etapa: { type: String, required: true },
-  casoId: { type: Number as PropType<number | null>, default: null },
+  solicitacaoId: { type: Number as PropType<number | null>, default: null },
   diasEdicao: { type: Number, default: 6 },
 });
 const emit = defineEmits(['close', 'alterado']);
@@ -201,13 +201,13 @@ function destaque(rotulo: string): string {
 
 /** Carrega o formulário da solicitação. */
 async function carregar(): Promise<void> {
-  if (!props.casoId) return;
+  if (!props.solicitacaoId) return;
   carregando.value = true;
   erro.value = '';
   aviso.value = '';
   faltando.value = [];
   try {
-    aplicar(await obterFormulario(props.etapa, props.casoId));
+    aplicar(await obterFormulario(props.etapa, props.solicitacaoId));
   } catch (e) {
     form.value = null;
     erro.value = mensagemErro(e, 'Não foi possível abrir o formulário.');
@@ -226,13 +226,13 @@ function aplicar(resposta: FormularioFase): void {
 
 /** Salvar: sem exigir obrigatórios. */
 async function salvar(): Promise<void> {
-  if (!form.value || !props.casoId) return;
+  if (!form.value || !props.solicitacaoId) return;
   salvando.value = true;
   erro.value = '';
   aviso.value = '';
   faltando.value = [];
   try {
-    aplicar(await salvarFormulario(props.etapa, props.casoId, dadosParaEnvio(form.value.campos, dados.value)));
+    aplicar(await salvarFormulario(props.etapa, props.solicitacaoId, dadosParaEnvio(form.value.campos, dados.value)));
     aviso.value = 'Formulário salvo.';
     versaoHistorico.value += 1;
     emit('alterado');
@@ -254,10 +254,10 @@ function pedirConclusao(): void {
 
 /** Envia a conclusão; a solicitação segue para a próxima fase. */
 async function concluir(): Promise<void> {
-  if (!form.value || !props.casoId) return;
+  if (!form.value || !props.solicitacaoId) return;
   concluindo.value = true;
   try {
-    aplicar(await concluirFormulario(props.etapa, props.casoId, dadosParaEnvio(form.value.campos, dados.value)));
+    aplicar(await concluirFormulario(props.etapa, props.solicitacaoId, dadosParaEnvio(form.value.campos, dados.value)));
     confirmando.value = false;
     aviso.value = 'Fase concluída. A solicitação seguiu para a próxima fase.';
     versaoHistorico.value += 1;
@@ -270,5 +270,5 @@ async function concluir(): Promise<void> {
   }
 }
 
-watch(() => [props.show, props.casoId], () => { if (props.show) carregar(); }, { immediate: true });
+watch(() => [props.show, props.solicitacaoId], () => { if (props.show) carregar(); }, { immediate: true });
 </script>

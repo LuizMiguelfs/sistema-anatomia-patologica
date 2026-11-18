@@ -50,10 +50,10 @@ class AuditoriaProviderInterface(ABC):
 
     @abstractmethod
     async def listar_historico(
-        self, recurso: str, categoria: str, limite: int = 50, offset: int = 0
+        self, recurso: str, categoria: str, limite: int = 50, offset: int = 0, recurso_legado: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Linha do tempo de um recurso exato em uma categoria, mais recentes primeiro, sem IP."""
+        """Linha do tempo de um recurso exato (e do seu nome antigo, se houver) em uma categoria, mais recentes primeiro, sem IP."""
 
     @abstractmethod
-    async def contar_historico(self, recurso: str, categoria: str) -> int:
+    async def contar_historico(self, recurso: str, categoria: str, recurso_legado: Optional[str] = None) -> int:
         """Conta os registros do histórico de um recurso em uma categoria."""
