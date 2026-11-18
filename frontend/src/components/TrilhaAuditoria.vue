@@ -15,7 +15,12 @@
       </div>
       <div>
         <label for="aud-acao" class="form-label">Ação</label>
-        <input id="aud-acao" v-model="filtros.acao" maxlength="100" placeholder="ex.: ALTERAR_PACIENTE" class="form-control" />
+        <select id="aud-acao" v-model="filtros.acao" class="form-control">
+          <option value="">Todas</option>
+          <optgroup v-for="grupo in gruposDeAcoes" :key="grupo.valor" :label="grupo.rotulo">
+            <option v-for="a in grupo.acoes" :key="a.valor" :value="a.valor">{{ a.rotulo }}</option>
+          </optgroup>
+        </select>
       </div>
       <div>
         <label for="aud-recurso" class="form-label">Recurso</label>
@@ -61,7 +66,7 @@
           <div><dt class="font-medium text-gray-500">Usuário</dt><dd>{{ detalhe.usuario }}</dd></div>
           <div><dt class="font-medium text-gray-500">Categoria</dt><dd>{{ rotuloCategoria(detalhe.categoria) }}</dd></div>
           <div><dt class="font-medium text-gray-500">IP de origem</dt><dd>{{ detalhe.ip_origem || '—' }}</dd></div>
-          <div class="col-span-2"><dt class="font-medium text-gray-500">Ação</dt><dd class="font-mono">{{ detalhe.acao }}</dd></div>
+          <div class="col-span-2"><dt class="font-medium text-gray-500">Ação</dt><dd :title="detalhe.acao">{{ rotuloAcao(detalhe.acao) }}</dd></div>
           <div class="col-span-2"><dt class="font-medium text-gray-500">Recurso</dt><dd class="font-mono">{{ detalhe.recurso }}</dd></div>
         </dl>
 
@@ -106,10 +111,11 @@
  * Trilha de auditoria (somente leitura): consulta GET /api/admin/auditoria.
  * O backend restringe o acesso à TI e à Chefia; esta tela não substitui essa checagem.
  */
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useToast } from 'vue-toastification';
 import { EyeIcon } from '@heroicons/vue/24/outline';
 import api from '../services/api';
+import { acoesConhecidas, rotuloAcao } from '../services/auditoria';
 import Button from './Button.vue';
 import DataTable from './DataTable.vue';
 import Modal from './Modal.vue';
@@ -166,10 +172,27 @@ const linhas = computed(() =>
     quando: formatarDataHora(r.created_at),
     usuario: r.usuario,
     categoria: rotuloCategoria(r.categoria),
-    acao: r.acao,
+    acao: rotuloAcao(r.acao),
     recurso: r.recurso,
   })),
 );
+
+// Trocou a categoria e a ação escolhida não pertence a ela: limpa a ação (não fica um filtro escondido).
+watch(() => filtros.categoria, (categoria) => {
+  const acao = acoesConhecidas().find((a) => a.valor === filtros.acao);
+  if (categoria && acao && acao.categoria !== categoria) filtros.acao = '';
+});
+
+/** Ações do filtro, agrupadas por categoria; com uma categoria escolhida, só as dela. */
+const gruposDeAcoes = computed(() => {
+  const todas = acoesConhecidas();
+  return categorias
+    .filter((c) => !filtros.categoria || c.valor === filtros.categoria)
+    .map((c) => ({
+      ...c,
+      acoes: todas.filter((a) => a.categoria === c.valor).sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR')),
+    }));
+});
 
 const resumoPagina = computed(() => {
   if (total.value === 0) return 'Nenhum registro';
