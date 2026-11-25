@@ -99,6 +99,89 @@ export async function desfazerRetirada(id: number): Promise<void> {
   await api.post(`/api/solicitacoes/${id}/desfazer-retirada`);
 }
 
+/** Amostra como vem do AGHU, com ID da origem (`<solicitação>-<amostra>`), código do exame e descrição. */
+export interface AmostraAghu {
+  amostra_aghu: string | number;
+  id_amostra?: string | null;
+  codigo_exame?: string | null;
+  nome_exame?: string | null;
+  tipo_exame?: string | null;
+  descricao?: string | null;
+  status?: string | null;
+  status_descricao?: string | null;
+}
+
+/** Pré-visualização da solicitação do AGHU antes de abri-la no SAP. */
+export interface PreviaAghu {
+  solicitacao_aghu: string | number;
+  paciente_nome: string;
+  prontuario_aghu: string | number | null;
+  tipo_exame: string | null;
+  tipos_exame: string[];
+  pendencias: string[];
+  urgente: boolean | null;
+  data_solicitacao: string | null;
+  origem: string | null;
+  unidade: string | null;
+  especialidade: string | null;
+  convenio: string | null;
+  status_aghu: string | null;
+  status_descricao: string | null;
+  qtd_amostras: number | null;
+  amostras_canceladas: number | null;
+  amostras: AmostraAghu[];
+  solicitacao_existente: string | null;
+}
+
+/** Amostra da solicitação aberta no SAP, com rótulo interno (`HP-0001/26-A2`). */
+export interface SolicitacaoAberta {
+  id: number;
+  identificador_interno: string;
+  tipo_exame: string;
+  urgente: boolean;
+  amostras: { amostra_aghu: string | number; descricao?: string | null; id_aghu?: string; identificador?: string }[];
+}
+
+/** Motivos que impedem a abertura (mesmas pendências do backend), em texto para a Recepção. */
+export const PENDENCIAS_AGHU: Readonly<Record<string, string>> = {
+  TIPOS_CONFLITANTES: 'As amostras desta solicitação são de tipos de exame diferentes.',
+  SIGLA_NAO_MAPEADA: 'Há exame do AGHU sem tipo mapeado no SAP.',
+  AMOSTRA_DUPLICADA: 'O AGHU trouxe a mesma amostra mais de uma vez.',
+  PACIENTE_DIVERGENTE: 'As linhas da solicitação trazem pacientes diferentes.',
+  SEM_AMOSTRA_VIGENTE: 'Todas as amostras estão canceladas no AGHU.',
+};
+
+/** Texto de uma pendência; devolve o próprio código se for desconhecida. */
+export function textoPendencia(codigo: string): string {
+  return PENDENCIAS_AGHU[codigo] ?? codigo;
+}
+
+/** A solicitação do AGHU pode ser aberta no SAP? (tem tipo, nenhuma pendência, amostras e ainda não foi aberta). */
+export function podeAbrir(previa: PreviaAghu | null): boolean {
+  return Boolean(
+    previa && previa.tipo_exame && !previa.pendencias?.length && previa.amostras.length && !previa.solicitacao_existente,
+  );
+}
+
+/** Data `aaaa-mm-dd` em `dd/mm/aaaa`; traço se vazia. */
+export function formatarData(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const [ano, mes, dia] = iso.split('-');
+  return dia && mes && ano ? `${dia}/${mes}/${ano}` : iso;
+}
+
+/** Recepção consulta a solicitação no AGHU (somente leitura) antes de abri-la. */
+export async function consultarSolicitacaoAghu(numero: string): Promise<PreviaAghu> {
+  const { data } = await api.get<PreviaAghu>(`/api/solicitacoes/aghu/solicitacao/${encodeURIComponent(numero.trim())}`);
+  return data;
+}
+
+/** Recepção abre no SAP a solicitação recebida no AGHU (só o número vai no corpo; o resto vem do AGHU). */
+export async function abrirSolicitacao(numero: string): Promise<SolicitacaoAberta> {
+  const { data } = await api.post<SolicitacaoAberta>('/api/solicitacoes', { solicitacao_aghu: numero.trim() });
+  return data;
+}
+
 /** Extrai a mensagem padrão {"detail": "..."} devolvida pela API. */
 export function mensagemErro(error: unknown, padrao = 'Não foi possível concluir a operação.'): string {
   const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;

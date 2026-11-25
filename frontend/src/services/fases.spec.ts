@@ -4,7 +4,7 @@ vi.mock('./api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() }
 
 import api from './api';
 import type { CampoFormulario } from './fases';
-import { camposFaltando, concluirFormulario, dadosParaEnvio, listarFila, salvarFormulario } from './fases';
+import { camposFaltando, concluirFormulario, dadosParaEnvio, listarFila, rotuloAmostra, salvarFormulario } from './fases';
 
 const mockApi = api as unknown as {
   get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>;
@@ -45,5 +45,19 @@ describe('services/fases', () => {
     await concluirFormulario('MICROSCOPIA', 3, { diagnostico: 'b' });
     expect(mockApi.put).toHaveBeenCalledWith('/api/fases/MICROSCOPIA/solicitacoes/3', { dados: { pre_laudo: 'a' } });
     expect(mockApi.post).toHaveBeenCalledWith('/api/fases/MICROSCOPIA/solicitacoes/3/concluir', { dados: { diagnostico: 'b' } });
+  });
+});
+
+describe('rotuloAmostra', () => {
+  it('mostra o rótulo do SAP e a descrição, diferenciando amostras da mesma solicitação', () => {
+    const a1 = { id: 1, amostra_aghu: '1', identificador: 'HP-0001/26-A1', descricao: 'Corpo gástrico' };
+    const a2 = { id: 2, amostra_aghu: '2', identificador: 'HP-0001/26-A2', descricao: 'Corpo gástrico' };
+    expect(rotuloAmostra(a1)).toBe('HP-0001/26-A1 — Corpo gástrico');
+    expect(rotuloAmostra(a1)).not.toBe(rotuloAmostra(a2));
+  });
+
+  it('sem rótulo nem descrição, usa o número da amostra no AGHU', () => {
+    expect(rotuloAmostra({ id: 3, amostra_aghu: 4, descricao: null })).toBe('Amostra 4');
+    expect(rotuloAmostra({ id: 3, amostra_aghu: 4, descricao: '  ' , identificador: 'CG-0002/26-A4' })).toBe('CG-0002/26-A4');
   });
 });

@@ -4,6 +4,8 @@
   - Não retirados: urgentes no topo; depois do recebimento mais antigo para o mais recente.
   - Retirados: da retirada mais recente para a mais antiga.
   - Só a Recepção marca (ou desfaz) a retirada, sempre com confirmação; o backend registra e audita.
+  - A Recepção abre no SAP uma solicitação recebida no AGHU: digita o número, confere a prévia (tipo,
+    origem, status, data e amostras com ID) e confirma. Com pendência (ex.: tipos conflitantes), não abre.
   A aba vem de `route.meta.situacao`.
 -->
 <template>
@@ -28,7 +30,12 @@
     </div>
 
     <template v-else>
-      <p class="text-sm text-gray-600">{{ descricaoAba }}</p>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm text-gray-600">{{ descricaoAba }}</p>
+        <Button v-if="ehRecepcao && situacao === 'NAO_RETIRADO'" variant="primary" @click="abrirModalAghu">
+          Abrir solicitação do AGHU
+        </Button>
+      </div>
 
       <!-- Filtros -->
       <div class="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-white p-4 md:grid-cols-12">
@@ -120,6 +127,91 @@
       </div>
     </template>
 
+    <!-- Abrir solicitação do AGHU (Recepção) -->
+    <Modal :show="modalAghu" largura="xl" @close="fecharModalAghu">
+      <template #header>Abrir solicitação do AGHU</template>
+      <div class="space-y-4 text-sm">
+        <form class="flex gap-2" @submit.prevent="consultarAghu">
+          <input
+            v-model="numeroAghu"
+            class="min-w-0 flex-1 rounded border p-2 font-mono"
+            inputmode="numeric"
+            placeholder="Número da solicitação no AGHU"
+            aria-label="Número da solicitação no AGHU"
+          />
+          <Button variant="default" type="submit" :loading="consultando">Consultar</Button>
+        </form>
+
+        <p v-if="erroAghu" class="rounded bg-red-50 p-3 text-red-700" role="alert">{{ erroAghu }}</p>
+
+        <template v-if="previa">
+          <div class="grid grid-cols-2 gap-x-4 gap-y-1 rounded border border-gray-200 bg-gray-50 p-3 md:grid-cols-3">
+            <p><span class="text-gray-500">Solicitação AGHU:</span> <span class="font-mono">{{ previa.solicitacao_aghu }}</span></p>
+            <p>
+              <span class="text-gray-500">Exame:</span>
+              <strong>{{ previa.tipo_exame || (previa.tipos_exame.length ? previa.tipos_exame.join(' + ') : '—') }}</strong>
+              <span v-if="previa.urgente" class="ml-1 rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-bold uppercase text-white">Urgente</span>
+            </p>
+            <p><span class="text-gray-500">Data:</span> {{ formatarData(previa.data_solicitacao) }}</p>
+            <p><span class="text-gray-500">Origem:</span> {{ previa.origem || '—' }}</p>
+            <p><span class="text-gray-500">Unidade:</span> {{ previa.unidade || '—' }}</p>
+            <p><span class="text-gray-500">Especialidade:</span> {{ previa.especialidade || '—' }}</p>
+            <p><span class="text-gray-500">Status no AGHU:</span> {{ previa.status_descricao || previa.status_aghu || '—' }}</p>
+            <p><span class="text-gray-500">Paciente:</span> {{ previa.paciente_nome }}</p>
+            <p><span class="text-gray-500">Prontuário:</span> <span class="font-mono">{{ previa.prontuario_aghu || '—' }}</span></p>
+          </div>
+
+          <div v-if="previa.pendencias.length" class="rounded border border-red-200 bg-red-50 p-3 text-red-800" role="alert">
+            <p class="font-semibold">Esta solicitação não pode ser aberta no SAP:</p>
+            <ul class="ml-5 list-disc">
+              <li v-for="p in previa.pendencias" :key="p">{{ textoPendencia(p) }}</li>
+            </ul>
+            <p class="mt-1 text-xs">Acione a TI para conferir a solicitação no AGHU.</p>
+          </div>
+          <p v-else-if="previa.solicitacao_existente" class="rounded bg-amber-50 p-3 text-amber-800">
+            Já aberta no SAP como <strong class="font-mono">{{ previa.solicitacao_existente }}</strong>.
+          </p>
+
+          <div>
+            <p class="mb-1 font-semibold text-gray-700">
+              Amostras destinadas à Anatomia ({{ previa.amostras.length }})
+              <span v-if="previa.amostras_canceladas" class="font-normal text-gray-500">
+                · {{ previa.amostras_canceladas }} cancelada(s) no AGHU, fora da abertura
+              </span>
+            </p>
+            <div class="overflow-x-auto rounded border border-gray-200">
+              <table class="w-full text-left">
+                <thead>
+                  <tr class="bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    <th class="px-2 py-1">ID</th>
+                    <th class="px-2 py-1">Código</th>
+                    <th class="px-2 py-1">Exame</th>
+                    <th class="px-2 py-1">Descrição do material</th>
+                    <th class="px-2 py-1">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-if="!previa.amostras.length"><td colspan="5" class="px-2 py-2 text-center text-gray-500">Nenhuma amostra vigente.</td></tr>
+                  <tr v-for="a in previa.amostras" :key="a.id_amostra || String(a.amostra_aghu)">
+                    <td class="px-2 py-1 font-mono whitespace-nowrap">{{ a.id_amostra || a.amostra_aghu }}</td>
+                    <td class="px-2 py-1 font-mono">{{ a.codigo_exame || '—' }}<span v-if="a.tipo_exame" class="text-gray-500"> ({{ a.tipo_exame }})</span></td>
+                    <td class="px-2 py-1">{{ a.nome_exame || '—' }}</td>
+                    <td class="px-2 py-1">{{ a.descricao || 'Sem descrição no AGHU' }}</td>
+                    <td class="px-2 py-1">{{ a.status_descricao || a.status || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500">Os dados vêm do AGHU e não podem ser editados no SAP. A abertura fica registrada com seu usuário, data e hora.</p>
+        </template>
+      </div>
+      <template #footer>
+        <Button variant="default" @click="fecharModalAghu">Fechar</Button>
+        <Button variant="primary" :disabled="!podeAbrir(previa)" :loading="abrindo" @click="confirmarAbertura">Abrir no SAP</Button>
+      </template>
+    </Modal>
+
     <!-- Confirmação de retirar / desfazer -->
     <Modal :show="!!confirmacao" @close="confirmacao = null">
       <template #header>{{ confirmacao?.acao === 'retirar' ? 'Marcar como retirado' : 'Desfazer retirada' }}</template>
@@ -148,9 +240,10 @@ import { useRoute } from 'vue-router';
 import Button from '../components/Button.vue';
 import Modal from '../components/Modal.vue';
 import { useAuthStore } from '../stores/auth';
-import type { SituacaoRetirada, SolicitacaoExame } from '../services/solicitacoes';
+import type { PreviaAghu, SituacaoRetirada, SolicitacaoExame } from '../services/solicitacoes';
 import {
-  TIPOS_EXAME, desfazerRetirada, formatarDataHora, listarSolicitacoes, marcarRetirado, mensagemErro, rotuloEtapa,
+  TIPOS_EXAME, abrirSolicitacao, consultarSolicitacaoAghu, desfazerRetirada, formatarData, formatarDataHora,
+  listarSolicitacoes, marcarRetirado, mensagemErro, podeAbrir, rotuloEtapa, textoPendencia,
 } from '../services/solicitacoes';
 
 const ABAS = [
@@ -231,6 +324,66 @@ async function confirmar(): Promise<void> {
     erro.value = mensagemErro(e);
   } finally {
     processando.value = false;
+  }
+}
+
+// --- Abrir solicitação do AGHU (Recepção) ---------------------------------
+const modalAghu = ref(false);
+const numeroAghu = ref('');
+const previa = ref<PreviaAghu | null>(null);
+const erroAghu = ref('');
+const consultando = ref(false);
+const abrindo = ref(false);
+
+/** Abre o modal limpo. */
+function abrirModalAghu(): void {
+  aviso.value = '';
+  erro.value = '';
+  numeroAghu.value = '';
+  previa.value = null;
+  erroAghu.value = '';
+  modalAghu.value = true;
+}
+
+/** Fecha o modal. */
+function fecharModalAghu(): void {
+  modalAghu.value = false;
+}
+
+/** Consulta a solicitação no AGHU (somente leitura) e mostra a prévia. */
+async function consultarAghu(): Promise<void> {
+  const numero = numeroAghu.value.trim();
+  previa.value = null;
+  erroAghu.value = '';
+  if (!/^\d+$/.test(numero)) {
+    erroAghu.value = 'Informe o número da solicitação (só dígitos).';
+    return;
+  }
+  consultando.value = true;
+  try {
+    previa.value = await consultarSolicitacaoAghu(numero);
+  } catch (e) {
+    erroAghu.value = mensagemErro(e, 'Não foi possível consultar o AGHU.');
+  } finally {
+    consultando.value = false;
+  }
+}
+
+/** Abre a solicitação no SAP e mostra o identificador interno e os IDs das amostras. */
+async function confirmarAbertura(): Promise<void> {
+  if (!previa.value || !podeAbrir(previa.value)) return;
+  abrindo.value = true;
+  erroAghu.value = '';
+  try {
+    const aberta = await abrirSolicitacao(String(previa.value.solicitacao_aghu));
+    const ids = aberta.amostras.map((a) => a.identificador || a.amostra_aghu).join(', ');
+    aviso.value = `Solicitação ${aberta.identificador_interno} aberta com ${aberta.amostras.length} amostra(s): ${ids}.`;
+    modalAghu.value = false;
+    await pesquisar(1);
+  } catch (e) {
+    erroAghu.value = mensagemErro(e, 'Não foi possível abrir a solicitação.');
+  } finally {
+    abrindo.value = false;
   }
 }
 

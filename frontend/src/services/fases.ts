@@ -59,6 +59,15 @@ export interface PaginaFila {
   limite: number;
 }
 
+/** Amostra da solicitação: ID na origem (`<solicitação AGHU>-<amostra>`) e rótulo no SAP (`HP-0001/26-A2`). */
+export interface AmostraSolicitacao {
+  id: number;
+  amostra_aghu: string | number;
+  descricao?: string | null;
+  id_aghu?: string;
+  identificador?: string;
+}
+
 export interface FormularioFase {
   etapa: string;
   rotulo: string;
@@ -71,7 +80,7 @@ export interface FormularioFase {
     tipo_exame: string;
     etapa_atual: string;
     urgente: boolean;
-    amostras: { id: number; amostra_aghu: string | number; descricao?: string | null }[];
+    amostras: AmostraSolicitacao[];
   };
   situacao: 'RASCUNHO' | 'CONCLUIDA' | null;
   dados: Record<string, ValorCampo>;
@@ -139,4 +148,14 @@ export function dadosParaEnvio(campos: CampoFormulario[], dados: Record<string, 
     }
   });
   return saida;
+}
+
+/**
+ * Texto de uma amostra na tela: rótulo do SAP (ou número do AGHU) e a descrição do material.
+ * Exemplo: `HP-0001/26-A2 — Biópsia gástrica`.
+ */
+export function rotuloAmostra(amostra: AmostraSolicitacao): string {
+  const id = amostra.identificador || `Amostra ${amostra.amostra_aghu}`;
+  const descricao = (amostra.descricao || '').trim();
+  return descricao ? `${id} — ${descricao}` : id;
 }
