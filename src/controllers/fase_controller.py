@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
+from ..helpers.aghu_csv_helper import identificar_amostras
 from ..helpers.formularios_fase import (
     DIAS_EDICAO_APOS_CONCLUSAO, FASES, FASES_POR_ETAPA, campos_da_fase,
 )
@@ -182,7 +183,7 @@ async def obter_fase(
             "solicitacao_aghu": solicitacao["solicitacao_aghu"], "paciente_nome": solicitacao["paciente_nome"],
             "prontuario_aghu": solicitacao.get("prontuario_aghu"), "tipo_exame": solicitacao["tipo_exame"],
             "etapa_atual": solicitacao["etapa_atual"], "urgente": bool(solicitacao.get("urgente")),
-            "amostras": amostras,
+            "amostras": identificar_amostras(solicitacao, amostras),
         },
         "situacao": registro["situacao"] if registro else None,
         "dados": registro["dados"] if registro else {},

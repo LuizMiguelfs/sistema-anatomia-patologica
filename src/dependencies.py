@@ -85,6 +85,7 @@ def get_solicitacao_provider(
 
 
 from .providers.implementations.aghu_solicitacao_simulado_provider import AghuSolicitacaoSimuladoProvider
+from .providers.implementations.aghu_solicitacao_csv_provider import AghuSolicitacaoCsvProvider
 
 
 def _get_aghu_solicitacao_postgres_provider(
@@ -99,9 +100,13 @@ def _get_aghu_solicitacao_simulado_provider() -> AghuSolicitacaoProviderInterfac
     return AghuSolicitacaoSimuladoProvider(caminho=settings.AGHU_SIMULADO_PATH)
 
 
+def _get_aghu_solicitacao_csv_provider() -> AghuSolicitacaoProviderInterface:
+    """Provedor de solicitações lidas do CSV da vw_solicitacao (somente leitura, fora de produção)."""
+    return AghuSolicitacaoCsvProvider(caminho=settings.AGHU_CSV_PATH)
+
+
 #: Estratégia escolhida por AGHU_PROVIDER_TYPE (produção exige POSTGRES, ver config.py).
-get_aghu_solicitacao_provider = (
-    _get_aghu_solicitacao_postgres_provider
-    if settings.AGHU_PROVIDER_TYPE == "POSTGRES"
-    else _get_aghu_solicitacao_simulado_provider
-)
+get_aghu_solicitacao_provider = {
+    "POSTGRES": _get_aghu_solicitacao_postgres_provider,
+    "CSV": _get_aghu_solicitacao_csv_provider,
+}.get(settings.AGHU_PROVIDER_TYPE, _get_aghu_solicitacao_simulado_provider)
