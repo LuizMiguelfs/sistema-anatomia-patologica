@@ -8,6 +8,7 @@ O framework utiliza **dois contextos de persistência independentes**:
 |---|---|---|---|
 | Aplicação (SAP) | SQLite assíncrono | `APP_DB_URL` (ou `SQLITE_DSN`) | `authorized_users`, `refresh_tokens`, `audit_logs` e as tabelas das solicitações de exame (abaixo) |
 | AGHU | PostgreSQL assíncrono | `POSTGRES_DSN` | Consulta de pacientes e solicitações da origem, somente leitura (RN-01) |
+| AGHU por CSV (homologação) | CSV da `vw_solicitacao` | `AGHU_PROVIDER_TYPE=CSV`, `AGHU_CSV_PATH` | Export autorizado do AGHU (ou amostra anonimizada no mesmo leiaute), somente leitura e fora do Git; proibido em produção |
 | AGHU simulado (desenvolvimento) | JSON | `AGHU_PROVIDER_TYPE=SIMULADO`, `AGHU_SIMULADO_PATH` | Solicitações fictícias para demonstração, sem AGHU; proibido em produção |
 | Desenvolvimento offline | CSV | `PACIENTE_CSV_PATH` | Simulação do catálogo de pacientes sem AGHU |
 
@@ -48,6 +49,21 @@ O banco AGHU não é migrado pelo Alembic local. Em produção, o usuário de co
 - `solicitacao_movimentacoes` (append-only) registra cada passagem: `ABERTURA`, `RETIRADA`, `DESFAZER_RETIRADA`, `CONCLUSAO`, `ENCAMINHAMENTO`, `RETORNO` e `SINCRONIZACAO_AGHU`, com etapa de origem, destino, motivo, usuário e data.
 - `solicitacao_inconformidades` existe no esquema, mas o MVP ainda não tem onde registrar inconformidades; a devolução da solicitação é feita no AGHU (RN-06).
 - **Trilha de auditoria:** eventos novos usam o recurso `solicitacao:<id>` e os códigos `ABRIR_SOLICITACAO`, `ENCAMINHAR_SOLICITACAO` e `RETORNAR_SOLICITACAO`. Registros anteriores à renomeação continuam como `caso:<id>` e `ABRIR_CASO` etc. (a trilha é imutável); o histórico de uma solicitação mostra os dois.
+
+## CSV do AGHU (`vw_solicitacao`)
+
+O export da view `vw_solicitacao` traz **uma linha por amostra** (item da solicitação). O provider
+`AghuSolicitacaoCsvProvider` lê o arquivo, e as regras ficam em `src/helpers/aghu_csv_helper.py`:
+
+- **Leiaute:** `codigo_solicitacao`, `numero_amostra`, `cod_status_item`, `status_item_exame`, `data_solicitacao` (`dd/mm/aaaa`), `nome_paciente`, `data_nascimento`, `prontuario`, `especialidade`, `convenio`, `origem`, `unidade`, `codigo_lab`, `informacoes_clinica`, `sigla_exame`, `nome_exame` e `descricao_material`. Se faltar coluna, o arquivo é recusado. Campos com quebra de linha, BOM e caracteres invisíveis são aceitos.
+- **Agrupamento:** as linhas são agrupadas por `codigo_solicitacao`. Paciente, data, origem, unidade e especialidade vêm da solicitação; o exame, o material e o status vêm de cada amostra.
+- **Destinadas à Anatomia:** só as linhas dos laboratórios da Anatomia (`codigo_lab` 139, 203, 205, 207 e 209). As demais são ignoradas.
+- **Tipo do exame:** vem da sigla do AGHU (APECR, HPDER, MBIOP, MPCIR, COLUT e COUT2 → HP; CONGE → CO; IMUHI → IHQ; CCVM → CCV; CITOP, CPMAM e CITO → CG). Amostras canceladas (`CA`) não contam. Congelação é urgente.
+- **Tipos conflitantes e outras pendências:** se as amostras vigentes levam a tipos diferentes (ex.: peça cirúrgica + congelação), há sigla não mapeada, amostra repetida, paciente divergente ou só amostras canceladas, a solicitação fica sem tipo e com `pendencias`. A abertura no SAP é recusada com 409 e o motivo; o SAP não escolhe um tipo no lugar do AGHU.
+- **Status:** o código do AGHU (`LI`, `AC`, `EX`, `AE`, `CA`, `CO`, `EC`, `PE`) por amostra; na solicitação, o status comum ou `MISTO`.
+- **ID da amostra:** `<solicitação AGHU>-<número da amostra>` (ex.: `800002-2`), com a numeração do AGHU mantida mesmo quando não é contínua. No SAP, a amostra também tem o rótulo `<identificador interno>-A<número>` (ex.: `HP-0001/26-A2`). Os dois são derivados de `solicitacao_amostras.amostra_aghu`, que é único por solicitação; não há coluna nova.
+- **Dados não usados:** `data_nascimento` e `informacoes_clinica` não saem do provider (minimização, LGPD). A view não traz o código do paciente, então `paciente_codigo_aghu` fica vazio até o DBA incluí-lo.
+- **Pendente de validação:** a lista de laboratórios e o mapeamento sigla → tipo precisam do aceite da Chefia do UACAP e do DBA/SETISD (ponto de decisão 1). No CSV de 2025-2026 (21.176 solicitações, 32.134 amostras), 298 solicitações têm tipos conflitantes e 222 só têm amostras canceladas.
 
 ## Regras de Integridade
 * Trilha de auditoria obrigatória em `audit_logs` para mutações e proibição de exclusão física de registros de auditoria.

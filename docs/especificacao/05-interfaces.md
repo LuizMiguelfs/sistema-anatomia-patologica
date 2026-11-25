@@ -6,7 +6,7 @@
 |---|---|---|---|
 | `Login.vue` | `/login` | `src/routers/auth.py` | Login e recuperação de sessão |
 | `Home.vue` (Início) | `/` | `GET /api/dashboard/resumo` | Retrato das filas agora (não retiradas, pendentes e urgentes por fase, aguardando o patologista), indicadores do banco local e dicionário de KPIs; o que não é medido vem `null` e aparece como "Não medido" |
-| `Solicitacoes.vue` | `/solicitacoes/nao-retirados`, `/solicitacoes/retirados`, `/solicitacoes/arquivados` | `GET /api/solicitacoes`, `POST /api/solicitacoes/{id}/retirar` e `/desfazer-retirada` | Solicitações de Exames: Não retirados (urgentes no topo, mais antigas primeiro) e Retirados (mais recentes primeiro), com filtros por tipo, período e busca por prontuário, código AGHU ou código interno. Só a Recepção marca e desfaz a retirada. Arquivados aparece "em breve" |
+| `Solicitacoes.vue` | `/solicitacoes/nao-retirados`, `/solicitacoes/retirados`, `/solicitacoes/arquivados` | `GET /api/solicitacoes`, `POST /api/solicitacoes/{id}/retirar` e `/desfazer-retirada` | Solicitações de Exames: Não retirados (urgentes no topo, mais antigas primeiro) e Retirados (mais recentes primeiro), com filtros por tipo, período e busca por prontuário, código AGHU ou código interno. Só a Recepção marca e desfaz a retirada. Em Não retirados, a Recepção tem **Abrir solicitação do AGHU**: digita o número, vê a prévia (tipo, origem, unidade, data, status e amostras com ID, código e descrição; ou o motivo do bloqueio) e abre no SAP (`GET /api/solicitacoes/aghu/solicitacao/{numero}` e `POST /api/solicitacoes`). Arquivados aparece "em breve" |
 | `Fase.vue` + `FormularioFase.vue` + `LinhaDoTempo.vue` | `/fases/macroscopia`, `/fases/congelacao`, `/fases/processamento`, `/fases/ihq`, `/fases/microscopia`, `/fases/revisao-de-lamina` | `/api/fases/...` e `GET /api/auditoria/historico` | Fila de cada fase (urgentes no topo, mais antigas primeiro; concluídas ficam 6 dias para edição) e formulário com Salvar e Concluído. Todos os perfis veem; só o perfil da matriz edita. Embaixo, o histórico da solicitação |
 | `Configuracoes.vue` + `TrilhaAuditoria.vue` | `/configuracoes` | `/api/admin/usuarios`, `/api/admin/ad-user-search/{login}`, `/api/admin/auditoria` | Perfil do usuário (todos); gestão de usuários (Chefia); trilha de auditoria com ações em português (Chefia e TI) |
 
@@ -25,7 +25,7 @@
 | `GET /api/solicitacoes/{id}/historico` | Todos | Movimentações da solicitação |
 | `POST /api/solicitacoes/{id}/encaminhar` | Perfil responsável pela etapa atual | Desvio para outra etapa permitida pelo fluxo (ex.: IHQ pedida na Microscopia), com motivo obrigatório |
 | `POST /api/solicitacoes/{id}/retornar` | Perfil responsável pela etapa atual | Devolve à etapa de origem do encaminhamento, com motivo |
-| `GET /api/solicitacoes/aghu/solicitacao/{numero}`, `GET /api/solicitacoes/{id}/conferencia-aghu`, `POST /api/solicitacoes/{id}/sincronizar-aghu` | Recepção (conferir e sincronizar) | Pré-visualização do AGHU e conferência dos dados cadastrais, sem editar a fonte (RN-01) |
+| `GET /api/solicitacoes/aghu/solicitacao/{numero}`, `GET /api/solicitacoes/{id}/conferencia-aghu`, `POST /api/solicitacoes/{id}/sincronizar-aghu` | Recepção (conferir e sincronizar) | Pré-visualização do AGHU e conferência dos dados cadastrais, sem editar a fonte (RN-01). Com o AGHU por CSV, a pré-visualização traz também origem, unidade, data, status, `tipos_exame`, `pendencias` e, por amostra, `id_amostra`, `codigo_exame`, `nome_exame` e status |
 
 ### Fases do setor (`/api/fases`)
 
@@ -36,6 +36,8 @@
 | `GET /api/fases/{etapa}/solicitacoes/{id}` | Todos | Formulário da solicitação, com `pode_salvar`, `pode_concluir` e `editavel` por campo para o perfil |
 | `PUT /api/fases/{etapa}/solicitacoes/{id}` | Perfis que salvam (matriz) | Salvar: grava o rascunho sem exigir obrigatórios; numa fase concluída há até 6 dias, edita exigindo os obrigatórios |
 | `POST /api/fases/{etapa}/solicitacoes/{id}/concluir` | Perfis que concluem (matriz) | Concluído: exige os obrigatórios e envia à próxima fase (ou de volta à fase de origem, se veio por encaminhamento) |
+
+Cada amostra da solicitação aberta traz `id_aghu` (`<solicitação AGHU>-<amostra>`) e `identificador` (`HP-0001/26-A2`), exibidos no formulário da fase.
 
 Uma etapa só avança por `retirar` (Recepção) ou pelo `concluir` do formulário (RN-03). Campos que o perfil não edita (ex.: diagnóstico para Residentes) são ignorados no envio. Matriz de perfis: Macroscopia (Residentes); Congelação, Microscopia e Revisão de Lâmina (Residentes e patologista salvam, patologista conclui); Processamento Técnico e IHQ (Laboratório); Chefia visualiza tudo e não edita. Os campos dos formulários estão em `src/helpers/formularios_fase.py` e ainda serão definidos com o setor.
 
