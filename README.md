@@ -38,6 +38,13 @@ uv run uvicorn src.main:app --port 8000
 Entre em `http://localhost:8000` com um dos usuários `demo.*` (um por perfil) e a senha do
 `MOCK_AUTH_PASSWORD`. Nunca use dados reais de pacientes fora do ambiente do hospital.
 
+### Usar o CSV do AGHU (`vw_solicitacao`)
+
+Com o export autorizado (ou uma amostra anonimizada no mesmo leiaute), copie o arquivo para
+`data/aghu/vw_solicitacao.csv` (pasta fora do Git) e use `AGHU_PROVIDER_TYPE=CSV` no `.env`. O SAP
+agrupa as linhas por solicitação, define o tipo pela sigla do exame e bloqueia as solicitações com
+tipos conflitantes. Regras em `docs/especificacao/04-modelo-dados.md` ("CSV do AGHU").
+
 ---
 
 > **Arquitetura Web Full-Stack de Referência (Python / FastAPI + Vue 3 / Vite)**  

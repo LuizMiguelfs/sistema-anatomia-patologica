@@ -1,5 +1,14 @@
 # Registro de alterações — pacote de refino
 
+## Não lançado — Importação do CSV do AGHU
+
+- **AGHU por CSV:** `AGHU_PROVIDER_TYPE=CSV` lê o export da `vw_solicitacao` (`AGHU_CSV_PATH`, fora do Git e proibido em produção). As linhas são agrupadas por solicitação, com tipo de exame pela sigla do AGHU, origem, unidade, status, data e as amostras destinadas à Anatomia (código do exame e descrição do material).
+- **Tipos conflitantes:** solicitação com amostras de tipos diferentes, sigla não mapeada, amostra repetida, paciente divergente ou só amostras canceladas fica sem tipo e não abre no SAP (409 com o motivo).
+- **Tela de abertura:** em Solicitações de Exames → Não retirados, a Recepção abre uma solicitação do AGHU pelo número, com prévia do tipo, origem, status, data e amostras (ID, código e descrição) e o motivo do bloqueio quando houver.
+- **ID por amostra:** `<solicitação AGHU>-<amostra>` na origem e `<identificador interno>-A<amostra>` no SAP, exibido no formulário da fase.
+- **Testes:** amostra anonimizada no mesmo leiaute (`tests/fixtures/aghu_vw_solicitacao_anonimizada.csv`), com várias amostras, numeração não contínua, tipos conflitantes, cancelamentos e paciente externo.
+- Pendente: aceite da Chefia/DBA para os laboratórios da Anatomia e o mapeamento sigla → tipo; regra para as solicitações com tipos conflitantes (solicitação + item).
+
 ## Não lançado — Demonstração no Render
 
 - **Contêiner:** o `Dockerfile` passa a usar Python 3.13 e as dependências travadas do `uv.lock` (as mesmas do CI), aplica as migrações ao iniciar (`scripts/iniciar.sh`) e escuta na porta de `PORT` (padrão 8000).

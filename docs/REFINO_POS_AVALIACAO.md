@@ -13,6 +13,8 @@
 | Tipo de exame vem do AGHU? | **Sim e é imutável na abertura.** Não há seleção pela plataforma. | POST `/api/casos` aceita somente `solicitacao_aghu` e rejeita parâmetros adicionais. Tipo é validado no cabeçalho do AGHU, reconsultado no POST. Sem tipo válido, retorna conflito 409, **sem criar caso**. |
 | Atualização do paciente no AGHU? | Tratar como **conciliação cadastral** preservando histórico. | Nova conferência GET e sincronização POST auditada apenas pela Recepção para casos abertos. Conflito de identidade/tipo bloqueia; indisponibilidade do AGHU preserva o snapshot local. |
 
+> **Atualização (CSV da `vw_solicitacao`):** o export da view traz `sigla_exame` e `codigo_lab` por amostra. Com `AGHU_PROVIDER_TYPE=CSV`, o tipo passa a ser resolvido pela sigla do AGHU, com conflitos bloqueados (ver "CSV do AGHU" em `04-modelo-dados.md`). O mapeamento ainda precisa do aceite da Chefia e do DBA, e o SQL do provider PostgreSQL continua com `tipo_exame` nulo.
+>
 > **Dependência crítica:** o SQL de solicitação enviado com o projeto NÃO continha o código/tipo do exame. `src/providers/sql/aghu/buscar_solicitacao.sql` expõe temporariamente `NULL AS tipo_exame` de propósito. A equipe DBA/SETISD precisa confirmar as tabelas, codificações e cardinalidade por solicitação; até então **abertura bloqueada em ambiente real**. Não se deve inferir o procedimento pelo nome do paciente, pela amostra ou por seleção manual.
 
 ## 2. Matriz de origem de dados e governança

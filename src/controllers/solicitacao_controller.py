@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
+from ..helpers.aghu_csv_helper import identificar_amostras
 from ..helpers.audit_helper import registrar_auditoria
 from ..helpers.formularios_fase import FASES_POR_ETAPA
 from ..providers.interfaces.aghu_solicitacao_provider_interface import AghuSolicitacaoProviderInterface
@@ -158,8 +159,30 @@ async def _gravar(
 # --------------------------------------------------------------------------- #
 # UC002 - Abrir solicitação a partir do AGHU                                    #
 # --------------------------------------------------------------------------- #
+#: Por que o AGHU não definiu o tipo (pendências do ``aghu_csv_helper``), em texto para a Recepção.
+PENDENCIAS_AGHU = {
+    "TIPOS_CONFLITANTES": "as amostras da solicitação são de tipos de exame diferentes",
+    "SIGLA_NAO_MAPEADA": "há exame do AGHU sem tipo mapeado no SAP",
+    "AMOSTRA_DUPLICADA": "o AGHU trouxe a mesma amostra mais de uma vez",
+    "PACIENTE_DIVERGENTE": "as linhas da solicitação trazem pacientes diferentes",
+    "SEM_AMOSTRA_VIGENTE": "todas as amostras estão canceladas no AGHU",
+}
+
+
 def _tipo_aghu(cabecalho: Dict[str, Any]) -> str:
-    """Tipo do exame deve vir da origem oficial e estar mapeado para o fluxo SAP."""
+    """Tipo do exame deve vir da origem oficial e estar mapeado para o fluxo SAP.
+
+    Se a origem apontou pendências (ex.: tipos conflitantes entre as amostras), recusa com 409
+    e diz quais, sem escolher um tipo no lugar do AGHU.
+    """
+    pendencias = [PENDENCIAS_AGHU.get(p, p) for p in cabecalho.get("pendencias") or []]
+    if pendencias:
+        tipos = ", ".join(cabecalho.get("tipos_exame") or [])
+        raise HTTPException(
+            status_code=409,
+            detail=(f"Solicitação do AGHU bloqueada: {'; '.join(pendencias)}"
+                    f"{f' ({tipos})' if tipos else ''}. Acione a TI para conferir a solicitação no AGHU."),
+        )
     tipo = str(cabecalho.get("tipo_exame") or "").strip().upper()
     if tipo not in TIPOS_EXAME:
         raise HTTPException(
@@ -217,6 +240,8 @@ async def abrir_solicitacao(
         raise HTTPException(status_code=503, detail="AGHU indisponível no momento. Nenhuma solicitação foi aberta.")
     if not cabecalho:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada no AGHU.")
+    if cabecalho.get("pendencias"):
+        _tipo_aghu(cabecalho)  # 409 com o motivo (ex.: tipos conflitantes, amostras todas canceladas)
     if not amostras:
         raise HTTPException(status_code=422, detail="A solicitação não possui amostra vinculada.")
 
@@ -237,7 +262,8 @@ async def abrir_solicitacao(
             {
                 "identificador_interno": identificador,
                 "solicitacao_aghu": numero,
-                "paciente_codigo_aghu": str(cabecalho["paciente_codigo_aghu"]),
+                # O CSV da vw_solicitacao não traz o código do paciente: fica vazio, nunca inventado.
+                "paciente_codigo_aghu": str(cabecalho.get("paciente_codigo_aghu") or ""),
                 "paciente_nome": cabecalho["paciente_nome"],
                 "prontuario_aghu": str(cabecalho.get("prontuario_aghu") or "") or None,
                 "tipo_exame": tipo,
@@ -313,7 +339,7 @@ async def obter_solicitacao(solicitacao_id: int, usuario: Dict[str, Any], provid
         pode_concluir = bool(fase and perfil in fase["concluir"] and not arquivado and tem_saida)
     return {
         **solicitacao,
-        "amostras": amostras,
+        "amostras": identificar_amostras(solicitacao, amostras),
         "acoes": {
             "pode_concluir": pode_concluir,
             "pode_retornar": bool(responsavel and em_desvio),
@@ -430,7 +456,7 @@ async def _comparar_com_aghu(
         raise HTTPException(status_code=503, detail="AGHU indisponível. O cadastro local foi preservado.")
     if not origem:
         raise HTTPException(status_code=409, detail="Solicitação não localizada no AGHU; acione a TI.")
-    if str(origem.get("paciente_codigo_aghu")) != str(solicitacao["paciente_codigo_aghu"]):
+    if str(origem.get("paciente_codigo_aghu") or "") != str(solicitacao["paciente_codigo_aghu"] or ""):
         raise HTTPException(status_code=409, detail="Vínculo de paciente divergente no AGHU. Não é possível sincronizar automaticamente.")
     if _tipo_aghu(origem) != solicitacao["tipo_exame"]:
         raise HTTPException(status_code=409, detail="Tipo de exame divergente no AGHU. Encaminhe para revisão da gestão.")

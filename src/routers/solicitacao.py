@@ -68,11 +68,13 @@ class PaginaBuscaSolicitacoes(BaseModel):
 
 
 class AmostraSolicitacao(BaseModel):
-    """Amostra do AGHU vinculada à solicitação."""
+    """Amostra do AGHU vinculada à solicitação, com ID da origem e rótulo no SAP."""
     id: int
     solicitacao_id: int
     amostra_aghu: NumeroAghu
     descricao: Optional[str] = None
+    id_aghu: Optional[str] = None  # <solicitação AGHU>-<amostra>, ex.: 800002-2
+    identificador: Optional[str] = None  # rótulo no SAP, ex.: HP-0001/26-A2
 
 
 class AcoesSolicitacao(BaseModel):
@@ -93,18 +95,36 @@ class SolicitacaoDetalhe(SolicitacaoResumo):
 
 
 class AmostraAghu(BaseModel):
-    """Amostra da solicitação, como vem do AGHU."""
+    """Amostra da solicitação, como vem do AGHU (os campos extras vêm do CSV da vw_solicitacao)."""
     amostra_aghu: NumeroAghu
     descricao: Optional[str] = None
+    id_amostra: Optional[str] = None  # <solicitação AGHU>-<amostra>
+    codigo_exame: Optional[str] = None  # sigla do exame no AGHU (ex.: APECR)
+    nome_exame: Optional[str] = None
+    tipo_exame: Optional[str] = None
+    status: Optional[str] = None
+    status_descricao: Optional[str] = None
 
 
 class SolicitacaoAghu(BaseModel):
     """Pré-visualização da solicitação do AGHU antes de abri-la no SAP."""
     solicitacao_aghu: NumeroAghu
-    paciente_codigo_aghu: NumeroAghu
+    paciente_codigo_aghu: Optional[NumeroAghu] = None  # a vw_solicitacao (CSV) não traz
     paciente_nome: str
     prontuario_aghu: Optional[NumeroAghu] = None
     tipo_exame: Optional[str] = None
+    tipos_exame: List[str] = []
+    pendencias: List[str] = []  # por que o tipo não foi definido (ex.: TIPOS_CONFLITANTES)
+    urgente: Optional[bool] = None
+    data_solicitacao: Optional[str] = None
+    origem: Optional[str] = None
+    unidade: Optional[str] = None
+    especialidade: Optional[str] = None
+    convenio: Optional[str] = None
+    status_aghu: Optional[str] = None
+    status_descricao: Optional[str] = None
+    qtd_amostras: Optional[int] = None
+    amostras_canceladas: Optional[int] = None
     amostras: List[AmostraAghu]
     solicitacao_existente: Optional[str] = None
 

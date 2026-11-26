@@ -86,6 +86,12 @@ venv.bak
 .DS_Store
 Thumbs.db
 
+# Export do AGHU (vw_solicitacao): prontuário e dados clínicos, nunca no Git
+data/aghu/
+data/vw_solicitacao*.csv
+# Backups locais do banco (podem ter dados de pacientes)
+data/*.bak-*
+
 # Arquivos de log e banco de dados local
 *.log
 *.db

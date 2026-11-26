@@ -23,12 +23,15 @@ class Settings:
         or ("POSTGRES" if POSTGRES_DSN else "CSV")
     ).upper()
     PACIENTE_CSV_PATH = os.getenv("PACIENTE_CSV_PATH", "data/pacientes.csv")
-    # Solicitações do AGHU: POSTGRES (AGHU Slave) ou SIMULADO (JSON fictício, só fora de produção).
+    # Solicitações do AGHU: POSTGRES (AGHU Slave), CSV (export da vw_solicitacao) ou SIMULADO
+    # (JSON fictício). CSV e SIMULADO só fora de produção.
     AGHU_PROVIDER_TYPE = (
         os.getenv("AGHU_PROVIDER_TYPE", "").strip()
         or ("POSTGRES" if POSTGRES_DSN else "SIMULADO")
     ).upper()
     AGHU_SIMULADO_PATH = os.getenv("AGHU_SIMULADO_PATH", "data/aghu_simulado.json")
+    # CSV autorizado (ou amostra anonimizada) no leiaute da vw_solicitacao. Fora do Git (.gitignore).
+    AGHU_CSV_PATH = os.getenv("AGHU_CSV_PATH", "data/aghu/vw_solicitacao.csv")
     # Invariante: SAP nunca escreve na origem AGHU, independente de ambiente.
     PACIENTE_POSTGRES_ESCRITA = False
     ORACLE_DSN = os.getenv("ORACLE_DSN", "")
@@ -71,8 +74,8 @@ class Settings:
             raise RuntimeError("JWT_SECRET deve ter pelo menos 32 caracteres")
         validar_chave(cls.SAP_DATA_KEY)  # AES-256 obrigatório em todos os ambientes (SPEC.md)
         cls.prazos_exame_horas()
-        if cls.AGHU_PROVIDER_TYPE not in {"POSTGRES", "SIMULADO"}:
-            raise RuntimeError("AGHU_PROVIDER_TYPE deve ser POSTGRES ou SIMULADO")
+        if cls.AGHU_PROVIDER_TYPE not in {"POSTGRES", "CSV", "SIMULADO"}:
+            raise RuntimeError("AGHU_PROVIDER_TYPE deve ser POSTGRES, CSV ou SIMULADO")
         if cls.ENV == "production":
             if cls.AGHU_PROVIDER_TYPE != "POSTGRES":
                 raise RuntimeError("Produção exige solicitações do AGHU real (AGHU_PROVIDER_TYPE=POSTGRES)")

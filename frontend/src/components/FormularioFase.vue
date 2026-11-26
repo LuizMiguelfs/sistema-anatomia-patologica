@@ -30,7 +30,7 @@
         <p class="col-span-2 md:col-span-3"><span class="text-gray-500">Paciente:</span> {{ form.solicitacao.paciente_nome }}</p>
         <p class="col-span-2 md:col-span-3">
           <span class="text-gray-500">Amostras ({{ form.solicitacao.amostras.length }}):</span>
-          {{ form.solicitacao.amostras.map(a => a.descricao || `Amostra ${a.amostra_aghu}`).join('; ') || '—' }}
+          {{ form.solicitacao.amostras.map(rotuloAmostra).join('; ') || '—' }}
         </p>
       </div>
 
@@ -146,7 +146,7 @@ import Modal from './Modal.vue';
 import LinhaDoTempo from './LinhaDoTempo.vue';
 import type { FormularioFase, ValorCampo } from '../services/fases';
 import {
-  camposFaltando, concluirFormulario, dadosParaEnvio, obterFormulario, salvarFormulario,
+  camposFaltando, concluirFormulario, dadosParaEnvio, obterFormulario, rotuloAmostra, salvarFormulario,
 } from '../services/fases';
 import { formatarDataHora, mensagemErro } from '../services/solicitacoes';
 
