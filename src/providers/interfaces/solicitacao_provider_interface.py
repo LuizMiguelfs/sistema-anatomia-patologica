@@ -4,6 +4,10 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+class ConflitoDeMovimentacao(Exception):
+    """A solicitação foi alterada durante uma confirmação concorrente."""
+
+
 class SolicitacaoProviderInterface(ABC):
     """
     Interface (contrato) do acesso aos dados de solicitações no banco local da aplicação:
@@ -125,3 +129,28 @@ class SolicitacaoProviderInterface(ABC):
     @abstractmethod
     async def salvar_fase(self, dados: Dict[str, Any]) -> None:
         """Cria ou substitui o formulário da fase (solicitacao_id, etapa, dados, situacao, usuario, agora, concluido_*)."""
+
+    # T08: métodos aditivos (não abstratos para preservar Fakes dos testes legados).
+    async def listar_revisoes(self, limite: int, deslocamento: int) -> List[Dict[str, Any]]:
+        """Pré-laudos na fila de revisão."""
+        raise NotImplementedError
+
+    async def listar_pendentes_liberacao(self, limite: int, deslocamento: int) -> List[Dict[str, Any]]:
+        """Laudos validados esperando liberação/arquivo."""
+        raise NotImplementedError
+
+    async def listar_laudos_fases(self, solicitacao_id: int) -> List[Dict[str, Any]]:
+        """Formulários concluídos com informações do laudo."""
+        raise NotImplementedError
+
+    async def buscar_liberacao(self, solicitacao_id: int) -> Optional[Dict[str, Any]]:
+        """Evento de liberação local da solicitação."""
+        raise NotImplementedError
+
+    async def registrar_liberacao(self, solicitacao_id: int, fonte: str, referencia: str, agora: str, usuario: str) -> None:
+        """Grava evento de liberação sem commit."""
+        raise NotImplementedError
+
+    async def arquivar_liberacao(self, solicitacao_id: int, agora: str, usuario: str) -> None:
+        """Registra arquivamento após a liberação, sem commit."""
+        raise NotImplementedError

@@ -5,6 +5,7 @@ import Login from '../views/Login.vue';
 import Configuracoes from '../views/Configuracoes.vue';
 import Solicitacoes from '../views/Solicitacoes.vue';
 import Fase from '../views/Fase.vue';
+import Revisoes from '../views/Revisoes.vue';
 
 /** Fonte única de rotas. Funcionalidades ainda não integradas não aparecem no menu. */
 const router = createRouter({
@@ -21,6 +22,7 @@ const router = createRouter({
     { path: '/solicitacoes/nao-retirados', name: 'Solicitações de Exames · Não retirados', component: Solicitacoes, meta: { requiresAuth: true, situacao: 'NAO_RETIRADO' } },
     { path: '/solicitacoes/retirados', name: 'Solicitações de Exames · Retirados', component: Solicitacoes, meta: { requiresAuth: true, situacao: 'RETIRADO' } },
     { path: '/solicitacoes/arquivados', name: 'Solicitações de Exames · Arquivados', component: Solicitacoes, meta: { requiresAuth: true, situacao: 'ARQUIVADO' } },
+    { path: '/revisoes', name: 'Revisão e liberação', component: Revisoes, meta: { requiresAuth: true } },
     // Fases do setor (MVP): uma tela genérica, a etapa vem do meta
     { path: '/fases/macroscopia', name: 'Fase Pré-Analítica · Macroscopia', component: Fase, meta: { requiresAuth: true, etapa: 'MACROSCOPIA' } },
     { path: '/fases/congelacao', name: 'Fase Pré-Analítica · Congelação', component: Fase, meta: { requiresAuth: true, etapa: 'CONGELACAO' } },

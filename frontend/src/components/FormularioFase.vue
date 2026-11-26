@@ -259,7 +259,7 @@ async function concluir(): Promise<void> {
   try {
     aplicar(await concluirFormulario(props.etapa, props.solicitacaoId, dadosParaEnvio(form.value.campos, dados.value)));
     confirmando.value = false;
-    aviso.value = 'Fase concluída. A solicitação seguiu para a próxima fase.';
+    aviso.value = 'Fase concluída. A solicitação seguiu para a próxima etapa; se houve validação clínica final, aguardará a liberação do laudo no AGHU.';
     versaoHistorico.value += 1;
     emit('alterado');
   } catch (e) {

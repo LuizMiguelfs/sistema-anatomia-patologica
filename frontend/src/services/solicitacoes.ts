@@ -5,7 +5,8 @@
  */
 import api from './api';
 
-export type SituacaoRetirada = 'NAO_RETIRADO' | 'RETIRADO';
+export type SituacaoRetirada = 'NAO_RETIRADO' | 'RETIRADO' | 'ARQUIVADO';
+export interface CredencialResponsavel { username: string; password: string; }
 
 /** Linha das listas de solicitações. */
 export interface SolicitacaoExame {
@@ -19,6 +20,7 @@ export interface SolicitacaoExame {
   status: string;
   urgente: boolean;
   criado_em: string;
+  atualizado_em: string | null;
   retirado_em: string | null;
   retirado_por: string | null;
   qtd_amostras: number;
@@ -61,6 +63,7 @@ export const ETAPAS: Readonly<Record<string, string>> = {
   REVISAO: 'Revisão de Lâmina',
   REDE_EXTERNA: 'Rede externa',
   ARQUIVO: 'Arquivada',
+  AGUARDANDO_LIBERACAO: 'Aguardando liberação do laudo',
 };
 
 /** Rótulo legível de uma etapa; devolve o próprio valor se for desconhecida. */
@@ -90,13 +93,13 @@ export async function listarSolicitacoes(
 }
 
 /** Recepção marca o material como retirado (a solicitação segue para a próxima fase). */
-export async function marcarRetirado(id: number): Promise<void> {
-  await api.post(`/api/solicitacoes/${id}/retirar`);
+export async function marcarRetirado(id: number, credencial: CredencialResponsavel): Promise<void> {
+  await api.post(`/api/solicitacoes/${id}/retirar`, credencial);
 }
 
 /** Recepção desfaz a retirada (a solicitação volta para "Não retirados"). */
-export async function desfazerRetirada(id: number): Promise<void> {
-  await api.post(`/api/solicitacoes/${id}/desfazer-retirada`);
+export async function desfazerRetirada(id: number, credencial: CredencialResponsavel): Promise<void> {
+  await api.post(`/api/solicitacoes/${id}/desfazer-retirada`, credencial);
 }
 
 /** Extrai a mensagem padrão {"detail": "..."} devolvida pela API. */

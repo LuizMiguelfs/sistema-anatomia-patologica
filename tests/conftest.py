@@ -11,6 +11,7 @@ os.environ["ENV"] = "testing"
 os.environ["AD_URL"] = ""
 os.environ["AUTH_ALLOW_MOCK"] = "true"
 os.environ["MOCK_AUTH_PASSWORD"] = "admin"  # somente fixture de teste
+os.environ["MOCK_AUTH_USERS"] = "ana.recepcao,bia.lab,caio.res,dora.pat,eva.chefia"
 os.environ["SQLITE_DSN"] = ""
 os.environ["JWT_SECRET"] = "chave-exclusiva-testes-nunca-usar-em-producao-1234567890"
 # Chave AES-256 só de teste (32 bytes em base64).

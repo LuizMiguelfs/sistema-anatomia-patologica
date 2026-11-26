@@ -91,7 +91,7 @@ def _confere_com_as_telas(client, filas) -> None:
 def test_retrato_bate_com_as_filas_e_conta_quem_aguarda_o_patologista(api):
     client, ids = api
     for numero in ("101", "102", "104"):  # HP → Macroscopia, CO → Congelação (urgente), RL → Revisão
-        assert client.post(f"/api/solicitacoes/{ids[numero]}/retirar", headers=REC).status_code == 200
+        assert client.post(f"/api/solicitacoes/{ids[numero]}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC).status_code == 200
 
     # Congelação: o residente salva a análise preliminar (o pré-laudo dessa fase) → aguarda o patologista.
     r = client.put(f"/api/fases/CONGELACAO/solicitacoes/{ids['102']}",
@@ -141,7 +141,7 @@ def test_indicadores_contam_so_o_que_o_fluxo_registra(api):
     (que o SAP ainda não registra) fica "Não medido" em vez de zero."""
     client, ids = api
     sid = ids["101"]  # HP
-    assert client.post(f"/api/solicitacoes/{sid}/retirar", headers=REC).status_code == 200
+    assert client.post(f"/api/solicitacoes/{sid}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC).status_code == 200
     macro = {"descricao_macroscopica": "x", "qtd_fragmentos": 1, "qtd_cassetes": 1, "laudo_macroscopico": "x"}
     assert client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{sid}/concluir", json={"dados": macro}, headers=RES).status_code == 200
     proc = {"inicio": "Histotécnico", "qtd_blocos": 1, "qtd_laminas": 2}

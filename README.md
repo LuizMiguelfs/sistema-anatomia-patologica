@@ -14,12 +14,15 @@ requisitos e casos de uso) está em [`docs/especificacao/`](docs/especificacao/R
   os campos obrigatórios e envia a solicitação para a próxima fase. Todos os perfis veem tudo;
   só o perfil responsável edita. Os campos ainda são provisórios.
 - **Histórico:** cada solicitação mostra o que foi feito, por quem e quando (trilha de auditoria).
+- **Confirmação de retirada (T04):** o profissional informa sua própria credencial; o SAP registra separadamente quem realizou a retirada e a sessão da estação.
+- **Revisão e arquivo (T08):** rascunho, validação clínica, liberação fictícia no ambiente de demonstração e consulta de arquivados com histórico. O SAP não emite nem importa laudo oficial do AGHU.
 - **Início:** retrato das filas (não retiradas, pendentes e urgentes por fase, aguardando o
   patologista) e indicadores que contam só o que o fluxo registra.
 - **Dados do AGHU são somente leitura** (RN-01): o SAP nunca cria nem edita uma solicitação do AGHU.
 
-Ainda não estão prontos: formulários reais de cada fase, aba Arquivados, retornos entre etapas,
-envios externos e a leitura do AGHU real. As decisões técnicas sobre o AGHU estão em
+Ainda não estão prontos: formulários clínicos definitivos, algumas rotas de retorno e envio externo,
+integração operacional com o AGHU real e importação do laudo oficial. A liberação exibida no modo de
+demonstração é fictícia e não equivale à homologação do hospital. As decisões técnicas sobre o AGHU estão em
 [`docs/REFINO_POS_AVALIACAO.md`](docs/REFINO_POS_AVALIACAO.md).
 
 ### Rodar a demonstração (dados fictícios)

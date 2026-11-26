@@ -12,7 +12,9 @@ from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
-from ..providers.interfaces.solicitacao_provider_interface import SolicitacaoProviderInterface
+from ..providers.interfaces.solicitacao_provider_interface import (
+    SolicitacaoProviderInterface, ConflitoDeMovimentacao,
+)
 from .solicitacao_controller import (
     PERFIL_RECEPCAO, STATUS_ARQUIVADO, TIPOS_EXAME, _agora, _solicitacao_ou_404, _exigir_perfil,
     _exigir_sem_pendencias, _gravar, _login, _status_derivado,
@@ -20,7 +22,7 @@ from .solicitacao_controller import (
 
 logger = logging.getLogger("solicitacoes")
 
-SITUACOES = {"NAO_RETIRADO", "RETIRADO"}
+SITUACOES = {"NAO_RETIRADO", "RETIRADO", "ARQUIVADO"}
 _DATA = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -49,7 +51,7 @@ async def listar_solicitacoes(
     """Lista "Não retirados" (urgentes no topo, mais antigo primeiro) ou "Retirados" (mais recente primeiro)."""
     situacao = (situacao or "").strip().upper()
     if situacao not in SITUACOES:
-        raise HTTPException(status_code=422, detail="Situação inválida: use NAO_RETIRADO ou RETIRADO.")
+        raise HTTPException(status_code=422, detail="Situação inválida: use NAO_RETIRADO, RETIRADO ou ARQUIVADO.")
     pagina = max(pagina, 1)
     limite = min(max(limite, 1), 100)
     limpos = {
@@ -70,6 +72,7 @@ def _item(linha: Dict[str, Any]) -> Dict[str, Any]:
 
 async def marcar_retirado(
     solicitacao_id: int, usuario: Dict[str, Any], ip: Optional[str], provider: SolicitacaoProviderInterface,
+    estacao: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Recepção marca o material como retirado: encerra a etapa RECEPCAO e avança para a próxima fase."""
     _exigir_perfil(usuario, {PERFIL_RECEPCAO}, "marcar o material como retirado")
@@ -95,9 +98,12 @@ async def marcar_retirado(
         await _gravar(
             provider, usuario=usuario, ip=ip, acao="MARCAR_RETIRADO", solicitacao_id=solicitacao_id,
             anteriores={"etapa_atual": "RECEPCAO", "retirado_em": None},
-            novos={"etapa_atual": destino, "retirado_em": agora, "retirado_por": login},
+            novos={"etapa_atual": destino, "retirado_em": agora, "retirado_por": login, "sessao_da_estacao": estacao},
         )
         await provider.commit()
+    except ConflitoDeMovimentacao:
+        await provider.rollback()
+        raise HTTPException(409, "A retirada já foi confirmada em outra operação. Atualize a lista.") from None
     except Exception as erro:
         await provider.rollback()
         logger.error("Falha em %s: %s", "MARCAR_RETIRADO", erro.__class__.__name__)
@@ -107,6 +113,7 @@ async def marcar_retirado(
 
 async def desfazer_retirada(
     solicitacao_id: int, usuario: Dict[str, Any], ip: Optional[str], provider: SolicitacaoProviderInterface,
+    estacao: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Recepção desfaz a retirada enquanto a fase seguinte não registrou nada; a ação fica auditada."""
     _exigir_perfil(usuario, {PERFIL_RECEPCAO}, "desfazer a retirada")
@@ -132,9 +139,12 @@ async def desfazer_retirada(
         await _gravar(
             provider, usuario=usuario, ip=ip, acao="DESFAZER_RETIRADA", solicitacao_id=solicitacao_id,
             anteriores={"etapa_atual": etapa, "retirado_em": solicitacao["retirado_em"], "retirado_por": solicitacao.get("retirado_por")},
-            novos={"etapa_atual": "RECEPCAO", "retirado_em": None},
+            novos={"etapa_atual": "RECEPCAO", "retirado_em": None, "sessao_da_estacao": estacao},
         )
         await provider.commit()
+    except ConflitoDeMovimentacao:
+        await provider.rollback()
+        raise HTTPException(409, "A fase mudou durante a operação. Não é possível desfazer a retirada.") from None
     except Exception as erro:
         await provider.rollback()
         logger.error("Falha em %s: %s", "DESFAZER_RETIRADA", erro.__class__.__name__)

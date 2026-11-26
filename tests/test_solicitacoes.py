@@ -236,7 +236,7 @@ async def test_status_derivado_arquivado_e_nao_avanca_depois():
     await _concluir(p, "MACROSCOPIA", RESIDENTE)
     await _concluir(p, "PROCESSAMENTO", LAB)  # PROCESSAMENTO -> MICROSCOPIA
     await _concluir(p, "MICROSCOPIA", PATOLOGISTA)
-    assert p.solicitacoes[1]["etapa_atual"] == "ARQUIVO" and p.solicitacoes[1]["status"] == "ARQUIVADO"
+    assert p.solicitacoes[1]["etapa_atual"] == "AGUARDANDO_LIBERACAO" and p.solicitacoes[1]["status"] == "AGUARDANDO_LIBERACAO"
     assert await _status(_concluir(p, "MICROSCOPIA", PATOLOGISTA)) == 409
 
 

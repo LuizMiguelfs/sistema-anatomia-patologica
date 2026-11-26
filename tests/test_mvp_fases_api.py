@@ -100,30 +100,30 @@ def test_busca_pelos_tres_codigos_e_filtro_por_tipo(api):
 
 def test_retirar_so_recepcao_e_desfazer(api):
     client, _, ids = api
-    assert client.post(f"/api/solicitacoes/{ids['101']}/retirar", headers=LAB).status_code == 403
-    r = client.post(f"/api/solicitacoes/{ids['101']}/retirar", headers=REC)
+    assert client.post(f"/api/solicitacoes/{ids['101']}/retirar", json={"username": "bia.lab", "password": "admin"}, headers=LAB).status_code == 403
+    r = client.post(f"/api/solicitacoes/{ids['101']}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
     assert r.status_code == 200 and r.json()["etapa_atual"] == "MACROSCOPIA"
-    assert client.post(f"/api/solicitacoes/{ids['101']}/retirar", headers=REC).status_code == 409
+    assert client.post(f"/api/solicitacoes/{ids['101']}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC).status_code == 409
 
     retirados = client.get("/api/solicitacoes", params={"situacao": "RETIRADO"}, headers=REC).json()
     assert [i["solicitacao_aghu"] for i in retirados["items"]] == ["101"]
     assert retirados["items"][0]["retirado_por"] == "ana.recepcao"
     assert _nao_retirados(client)["total"] == 2
 
-    r = client.post(f"/api/solicitacoes/{ids['101']}/desfazer-retirada", headers=REC)
+    r = client.post(f"/api/solicitacoes/{ids['101']}/desfazer-retirada", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
     assert r.status_code == 200 and r.json()["etapa_atual"] == "RECEPCAO"
     assert _nao_retirados(client)["total"] == 3
 
     # Depois que a fase seguinte salva algo, não dá mais para desfazer.
-    client.post(f"/api/solicitacoes/{ids['101']}/retirar", headers=REC)
+    client.post(f"/api/solicitacoes/{ids['101']}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
     client.put(f"/api/fases/MACROSCOPIA/solicitacoes/{ids['101']}", json={"dados": {"qtd_fragmentos": 1}}, headers=RES)
-    assert client.post(f"/api/solicitacoes/{ids['101']}/desfazer-retirada", headers=REC).status_code == 409
+    assert client.post(f"/api/solicitacoes/{ids['101']}/desfazer-retirada", json={"username": "ana.recepcao", "password": "admin"}, headers=REC).status_code == 409
 
 
 def test_fila_mostra_so_a_fase_atual(api):
     client, _, ids = api
-    client.post(f"/api/solicitacoes/{ids['101']}/retirar", headers=REC)
-    client.post(f"/api/solicitacoes/{ids['102']}/retirar", headers=REC)
+    client.post(f"/api/solicitacoes/{ids['101']}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
+    client.post(f"/api/solicitacoes/{ids['102']}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
     macro = client.get("/api/fases/MACROSCOPIA/fila", headers=CHE).json()
     assert [i["solicitacao_aghu"] for i in macro["items"]] == ["101"]
     assert client.get("/api/fases/MICROSCOPIA/fila", headers=CHE).json()["total"] == 0
@@ -134,7 +134,7 @@ def test_fila_mostra_so_a_fase_atual(api):
 def test_salvar_concluir_obrigatorios_e_perfis(api):
     client, db, ids = api
     solicitacao = ids["101"]
-    client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC)
+    client.post(f"/api/solicitacoes/{solicitacao}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
     url = f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}"
 
     assert client.put(url, json={"dados": {"qtd_fragmentos": 2}}, headers=LAB).status_code == 403
@@ -174,7 +174,7 @@ def test_salvar_concluir_obrigatorios_e_perfis(api):
 def test_microscopia_residente_preenche_e_patologista_conclui(api):
     client, _, ids = api
     solicitacao = ids["101"]
-    client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC)
+    client.post(f"/api/solicitacoes/{solicitacao}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
     client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}/concluir", headers=RES, json={"dados": {
         "descricao_macroscopica": "F", "qtd_fragmentos": 1, "qtd_cassetes": 1, "laudo_macroscopico": "L"}})
     client.post(f"/api/fases/PROCESSAMENTO/solicitacoes/{solicitacao}/concluir", headers=LAB, json={"dados": {
@@ -191,13 +191,13 @@ def test_microscopia_residente_preenche_e_patologista_conclui(api):
     assert next(c for c in visao_pat["campos"] if c["nome"] == "diagnostico")["editavel"] is True
 
     r = client.post(f"{url}/concluir", json={"dados": {"diagnostico": "Diagnóstico final"}}, headers=PAT)
-    assert r.status_code == 200 and r.json()["solicitacao"]["etapa_atual"] == "ARQUIVO"
+    assert r.status_code == 200 and r.json()["solicitacao"]["etapa_atual"] == "AGUARDANDO_LIBERACAO"
 
 
 def test_ihq_pedida_na_microscopia_volta_para_microscopia(api):
     client, _, ids = api
     solicitacao = ids["103"]
-    client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC)
+    client.post(f"/api/solicitacoes/{solicitacao}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC)
     client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}/concluir", headers=RES, json={"dados": {
         "descricao_macroscopica": "F", "qtd_fragmentos": 1, "qtd_cassetes": 1, "laudo_macroscopico": "L"}})
     client.post(f"/api/fases/PROCESSAMENTO/solicitacoes/{solicitacao}/concluir", headers=LAB, json={"dados": {
@@ -224,7 +224,7 @@ def test_historico_da_solicitacao_para_todos_os_perfis(api):
     conclusão, para qualquer perfil, sem IP de origem."""
     client, _, ids = api
     solicitacao = ids["101"]
-    assert client.post(f"/api/solicitacoes/{solicitacao}/retirar", headers=REC).status_code == 200
+    assert client.post(f"/api/solicitacoes/{solicitacao}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC).status_code == 200
     rascunho = {"dados": {"descricao_macroscopica": "Fragmento fictício"}}
     assert client.put(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}", json=rascunho, headers=RES).status_code == 200
     form = client.get(f"/api/fases/MACROSCOPIA/solicitacoes/{solicitacao}", headers=RES).json()
@@ -279,7 +279,7 @@ def test_concluir_sem_obrigatorios_nao_avanca(api):
     """T4.2 / RN-03: sem os obrigatórios, a fase não conclui e a solicitação fica onde está."""
     client, _, ids = api
     sid = ids["101"]
-    assert client.post(f"/api/solicitacoes/{sid}/retirar", headers=REC).status_code == 200
+    assert client.post(f"/api/solicitacoes/{sid}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=REC).status_code == 200
     r = client.post(f"/api/fases/MACROSCOPIA/solicitacoes/{sid}/concluir",
                     json={"dados": {"descricao_macroscopica": "Só a descrição"}}, headers=RES)
     assert r.status_code == 422 and "Preencha os campos obrigatórios" in r.json()["detail"]

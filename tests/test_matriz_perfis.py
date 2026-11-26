@@ -187,7 +187,7 @@ def test_retirar(cenario):
     respostas = {}
     for perfil in PERFIS:
         solicitacao_id = cenario.nova("HP")
-        r = cenario.client.post(f"/api/solicitacoes/{solicitacao_id}/retirar", headers=_cabecalho(perfil))
+        r = cenario.client.post(f"/api/solicitacoes/{solicitacao_id}/retirar", json={"username": USUARIOS[perfil], "password": "admin"}, headers=_cabecalho(perfil))
         respostas[perfil] = r.status_code
     _conferir("retirar", respostas, MATRIZ_SOLICITACOES["retirar"])
 
@@ -196,7 +196,7 @@ def test_desfazer_retirada(cenario):
     respostas = {}
     for perfil in PERFIS:
         solicitacao_id = cenario.na_fase("MACROSCOPIA")
-        r = cenario.client.post(f"/api/solicitacoes/{solicitacao_id}/desfazer-retirada", headers=_cabecalho(perfil))
+        r = cenario.client.post(f"/api/solicitacoes/{solicitacao_id}/desfazer-retirada", json={"username": USUARIOS[perfil], "password": "admin"}, headers=_cabecalho(perfil))
         respostas[perfil] = r.status_code
     _conferir("desfazer retirada", respostas, MATRIZ_SOLICITACOES["desfazer_retirada"])
 

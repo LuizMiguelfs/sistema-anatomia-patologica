@@ -78,9 +78,9 @@ def test_fluxo_completo_pela_api(api):
 
     # A rota antiga que avançava a etapa sem formulário não existe mais (T4.2).
     assert client.post(f"/api/solicitacoes/{solicitacao['id']}/concluir-etapa", headers=rec).status_code in (404, 405)  # 405: só a rota GET do frontend casa
-    r = client.post(f"/api/solicitacoes/{solicitacao['id']}/retirar", headers=rec)
+    r = client.post(f"/api/solicitacoes/{solicitacao['id']}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=rec)
     assert r.status_code == 200 and r.json()["etapa_atual"] == "MACROSCOPIA"
-    assert client.post(f"/api/solicitacoes/{solicitacao['id']}/retirar", headers=rec).status_code == 409  # já retirada
+    assert client.post(f"/api/solicitacoes/{solicitacao['id']}/retirar", json={"username": "ana.recepcao", "password": "admin"}, headers=rec).status_code == 409  # já retirada
 
     hist = client.get(f"/api/solicitacoes/{solicitacao['id']}/historico", headers=_h("bia.lab", "LABORATORIO")).json()
     assert [m["tipo"] for m in hist] == ["ABERTURA", "RETIRADA"]

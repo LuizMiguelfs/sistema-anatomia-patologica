@@ -5,8 +5,9 @@ delega ao Controller. Protegido por padrão (Default-Private Router Pattern).
 """
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from starlette.concurrency import run_in_threadpool
 
 from ..auth.auth import auth_handler
 from ..controllers import retirada_controller
@@ -34,6 +35,7 @@ class SolicitacaoItem(BaseModel):
     status: str
     urgente: bool
     criado_em: str
+    atualizado_em: Optional[str] = None
     retirado_em: Optional[str] = None
     retirado_por: Optional[str] = None
     qtd_amostras: int
@@ -46,6 +48,33 @@ class PaginaSolicitacoes(BaseModel):
     total: int
     pagina: int
     limite: int
+
+
+class CredencialResponsavel(BaseModel):
+    """Comprovação de identidade do profissional, sem reutilizar a sessão da estação."""
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=1, max_length=128)
+    password: SecretStr = Field(min_length=1, max_length=4096)
+
+
+async def _confirmar_responsavel(
+    credencial: CredencialResponsavel, provider: SolicitacaoProviderInterface,
+) -> Dict[str, Any]:
+    """Reautentica contra AD/Mock, revalida cadastro local e exige perfil Recepção."""
+    try:
+        identidade = await run_in_threadpool(
+            auth_handler.authenticate_user, credencial.username, credencial.password.get_secret_value()
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, "Autenticação corporativa indisponível") from None
+    autorizado = await auth_handler.authorize_user(
+        identidade["username"], identidade.get("groups", []), provider.session,
+    )
+    if autorizado.role != "RECEPCAO":
+        raise HTTPException(403, "O responsável autenticado não possui o perfil Recepção")
+    return {"username": identidade["username"], "role": autorizado.role}
 
 
 class RetiradaOut(BaseModel):
@@ -63,7 +92,7 @@ def _ip(request: Request) -> Optional[str]:
 
 @router.get("", response_model=PaginaSolicitacoes)
 async def listar(
-    situacao: str = Query("NAO_RETIRADO", description="NAO_RETIRADO ou RETIRADO"),
+    situacao: str = Query("NAO_RETIRADO", description="NAO_RETIRADO, RETIRADO ou ARQUIVADO"),
     tipo_exame: Optional[str] = None,
     de: Optional[str] = Query(None, description="Data inicial AAAA-MM-DD (recebimento ou retirada)"),
     ate: Optional[str] = Query(None, description="Data final AAAA-MM-DD"),
@@ -81,19 +110,27 @@ async def listar(
 async def retirar(
     solicitacao_id: int,
     request: Request,
+    credencial: CredencialResponsavel,
     usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
     provider: SolicitacaoProviderInterface = Depends(get_solicitacao_provider),
 ) -> Dict[str, Any]:
     """Recepção marca o material como retirado (encerra a etapa da Recepção)."""
-    return await retirada_controller.marcar_retirado(solicitacao_id, usuario, _ip(request), provider)
+    ator = await _confirmar_responsavel(credencial, provider)
+    return await retirada_controller.marcar_retirado(
+        solicitacao_id, ator, _ip(request), provider, estacao=str(usuario["username"])
+    )
 
 
 @router.post("/{solicitacao_id}/desfazer-retirada", response_model=RetiradaOut)
 async def desfazer(
     solicitacao_id: int,
     request: Request,
+    credencial: CredencialResponsavel,
     usuario: Dict[str, Any] = Depends(auth_handler.decode_token),
     provider: SolicitacaoProviderInterface = Depends(get_solicitacao_provider),
 ) -> Dict[str, Any]:
     """Recepção desfaz a retirada (volta para "Não retirados")."""
-    return await retirada_controller.desfazer_retirada(solicitacao_id, usuario, _ip(request), provider)
+    ator = await _confirmar_responsavel(credencial, provider)
+    return await retirada_controller.desfazer_retirada(
+        solicitacao_id, ator, _ip(request), provider, estacao=str(usuario["username"])
+    )
