@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...helpers.crypto_helper import cifrar, decifrar, indice_busca, normalizar_prontuario
 from ...helpers.sql_helper import read_sql_file
-from ..interfaces.solicitacao_provider_interface import SolicitacaoProviderInterface
+from ..interfaces.solicitacao_provider_interface import (
+    SolicitacaoProviderInterface, ConflitoDeMovimentacao,
+)
 
 _SQL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sql")
 
@@ -237,13 +239,20 @@ class SolicitacaoSqliteProvider(SolicitacaoProviderInterface):
 
     async def marcar_retirada(self, solicitacao_id: int, etapa_atual: str, status: str, usuario: str, agora: str) -> None:
         """Executa `solicitacao/marcar_retirada.sql`."""
-        await self._exec("solicitacao/marcar_retirada.sql", {
-            "solicitacao_id": solicitacao_id, "etapa_atual": etapa_atual, "status": status, "usuario": usuario, "agora": agora,
+        resultado = await self.session.execute(text(get_sql_query("solicitacao/marcar_retirada.sql")), {
+            "solicitacao_id": solicitacao_id, "etapa_atual": etapa_atual, "status": status,
+            "usuario": usuario, "agora": agora,
         })
+        if resultado.rowcount != 1:
+            raise ConflitoDeMovimentacao("retirada não confirmada")
 
     async def desfazer_retirada(self, solicitacao_id: int, status: str, agora: str) -> None:
         """Executa `solicitacao/desfazer_retirada.sql`."""
-        await self._exec("solicitacao/desfazer_retirada.sql", {"solicitacao_id": solicitacao_id, "status": status, "agora": agora})
+        resultado = await self.session.execute(text(get_sql_query("solicitacao/desfazer_retirada.sql")), {
+            "solicitacao_id": solicitacao_id, "status": status, "agora": agora,
+        })
+        if resultado.rowcount != 1:
+            raise ConflitoDeMovimentacao("retirada não reversível")
 
     async def buscar_fase(self, solicitacao_id: int, etapa: str) -> Optional[Dict[str, Any]]:
         """Executa `solicitacao/buscar_fase.sql` e decodifica o JSON do formulário."""
@@ -259,4 +268,37 @@ class SolicitacaoSqliteProvider(SolicitacaoProviderInterface):
             "dados": json.dumps(dados["dados"], ensure_ascii=False),
             "situacao": dados["situacao"], "usuario": dados["usuario"], "agora": dados["agora"],
             "concluido_por": dados.get("concluido_por"), "concluido_em": dados.get("concluido_em"),
+        })
+
+    # --- Revisão, liberação fictícia e arquivamento (T08) -------------------
+    async def listar_revisoes(self, limite: int, deslocamento: int) -> List[Dict[str, Any]]:
+        """Executa consulta da fila de revisão; dados clínicos não vão para a lista."""
+        return await self._all("solicitacao/listar_revisoes.sql", {"limite": limite, "deslocamento": deslocamento})
+
+    async def listar_pendentes_liberacao(self, limite: int, deslocamento: int) -> List[Dict[str, Any]]:
+        """Solicitações validadas que aguardam liberação ou arquivamento."""
+        return await self._all("solicitacao/listar_pendentes_liberacao.sql", {"limite": limite, "deslocamento": deslocamento})
+
+    async def listar_laudos_fases(self, solicitacao_id: int) -> List[Dict[str, Any]]:
+        """Consulta textos das fases concluídas, sem preencher campos fictícios."""
+        itens = await self._all("solicitacao/listar_laudos_fases.sql", {"solicitacao_id": solicitacao_id})
+        for item in itens:
+            item["dados"] = json.loads(item["dados"] or "{}")
+        return itens
+
+    async def buscar_liberacao(self, solicitacao_id: int) -> Optional[Dict[str, Any]]:
+        """Evento registrado na tabela local de liberação."""
+        return await self._one("solicitacao/buscar_liberacao.sql", {"solicitacao_id": solicitacao_id})
+
+    async def registrar_liberacao(self, solicitacao_id: int, fonte: str, referencia: str, agora: str, usuario: str) -> None:
+        """Cria evento fictício de liberação; evita sobrescrever informação histórica."""
+        await self._exec("solicitacao/registrar_liberacao.sql", {
+            "solicitacao_id": solicitacao_id, "fonte": fonte, "referencia": referencia,
+            "agora": agora, "usuario": usuario,
+        })
+
+    async def arquivar_liberacao(self, solicitacao_id: int, agora: str, usuario: str) -> None:
+        """Marca o momento de arquivo vinculado à liberação já registrada."""
+        await self._exec("solicitacao/arquivar_liberacao.sql", {
+            "solicitacao_id": solicitacao_id, "agora": agora, "usuario": usuario,
         })

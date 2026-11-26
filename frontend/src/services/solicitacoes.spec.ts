@@ -28,10 +28,10 @@ describe('services/solicitacoes', () => {
 
   it('marca e desfaz a retirada', async () => {
     mockApi.post.mockResolvedValue({ data: {} });
-    await marcarRetirado(7);
-    await desfazerRetirada(7);
-    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/api/solicitacoes/7/retirar');
-    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/api/solicitacoes/7/desfazer-retirada');
+    await marcarRetirado(7, { username: 'ana.recepcao', password: 'senha' });
+    await desfazerRetirada(7, { username: 'ana.recepcao', password: 'senha' });
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, '/api/solicitacoes/7/retirar', { username: 'ana.recepcao', password: 'senha' });
+    expect(mockApi.post).toHaveBeenNthCalledWith(2, '/api/solicitacoes/7/desfazer-retirada', { username: 'ana.recepcao', password: 'senha' });
   });
 
   it('tem os seis tipos de exame e rótulos de etapa', () => {

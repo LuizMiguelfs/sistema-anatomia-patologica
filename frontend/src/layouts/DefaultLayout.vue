@@ -158,6 +158,7 @@ const GRUPOS_MENU = [
       { to: '/solicitacoes/nao-retirados', rotulo: 'Não retirados', icone: InboxIcon },
       { to: '/solicitacoes/retirados', rotulo: 'Retirados', icone: InboxArrowDownIcon },
       { to: '/solicitacoes/arquivados', rotulo: 'Arquivados', icone: ArchiveBoxIcon },
+      { to: '/revisoes', rotulo: 'Revisão e liberação', icone: DocumentMagnifyingGlassIcon },
     ],
   },
   {

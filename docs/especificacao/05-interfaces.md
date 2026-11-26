@@ -67,3 +67,13 @@ Não existe rota de exclusão de usuário. Perfis aceitos: `RECEPCAO`, `LABORATO
 ## Dependências externas ainda sujeitas a validação
 
 Impressora/etiquetas, leitor de códigos e sincronização de laudos não possuem contratos completos demonstrados nas rotas deste snapshot. Não presumir que estes fluxos estão prontos para demo sem testes de ponta a ponta.
+
+## Matriz inicial das tarefas 04, 05 e 08 (proposta para validação com o HC)
+
+- **Consultar:** os cinco perfis do SAP visualizam filas, fases e histórico segundo a política atual de acesso autenticado. A proteção de dados clínicos por necessidade de acesso ainda exige validação institucional.
+- **Retirada e desfazimento:** exigem a própria credencial AD de profissional com perfil local `RECEPCAO`, inclusive se a estação estiver aberta em nome de outra pessoa. A auditoria distingue responsável confirmado e sessão da estação; nenhuma senha é armazenada.
+- **Macroscopia:** Residentes salvam e concluem. **Processamento e IHQ:** Laboratório salva e conclui. **Microscopia, Congelação e Revisão:** Residente pode preparar rascunho; Preceptoria valida e conclui. Diagnóstico clínico é campo restrito à Preceptoria.
+- **Liberação:** não é o mesmo que conclusão da fase. Em demonstração, a Preceptoria pode registrar um evento **fictício** de liberação do AGHU, identificado como simulação; fora do modo Mock o endpoint é bloqueado. **Arquivar:** somente Preceptoria e somente após liberação registrada.
+- **Pendências de validação:** matriz definitiva de acesso a dados clínicos com os profissionais do HC; evento real de laudo liberado no AGHU com SETISD; regras de revisão e retificação após liberação; importação ou referência segura a PDF oficial do AGHU.
+
+A API `GET /api/permissoes` expõe a matriz inicial e as capacidades do perfil. O frontend apenas apresenta os controles; todas as decisões de autorização continuam no servidor.

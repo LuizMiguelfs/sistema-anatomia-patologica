@@ -130,3 +130,14 @@ class SolicitacaoFase(Base):
     salvo_em = Column(String(40), nullable=False)
     concluido_por = Column(String(100))
     concluido_em = Column(String(40))
+
+class SolicitacaoLiberacao(Base):
+    """Evento local de demonstração; NUNCA substitui o lançamento oficial no AGHU."""
+    __tablename__ = "solicitacao_liberacoes"
+    solicitacao_id = Column(Integer, ForeignKey("solicitacoes_exame.id"), primary_key=True)
+    fonte = Column(String(30), nullable=False)
+    referencia = Column(String(80), nullable=False)
+    liberado_em = Column(String(40), nullable=False)
+    liberado_por = Column(String(100), nullable=False)
+    arquivado_em = Column(String(40))
+    arquivado_por = Column(String(100))

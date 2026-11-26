@@ -98,7 +98,8 @@ describe('FormularioFase', () => {
     await flushPromises();
     expect(concluirFormulario).toHaveBeenCalledWith('MICROSCOPIA', 7, { pre_laudo: 'Texto fictício', diagnostico: 'Texto fictício', qtd_laminas: null });
     expect(w.emitted('alterado')).toHaveLength(1);
-    expect(w.text()).toContain('Fase concluída. A solicitação seguiu para a próxima fase.');
+    expect(w.text()).toContain('Fase concluída. A solicitação seguiu para a próxima etapa;');
+    expect(w.text()).toContain('aguardará a liberação do laudo no AGHU.');
   });
 
   it('Salvar grava sem exigir os obrigatórios', async () => {

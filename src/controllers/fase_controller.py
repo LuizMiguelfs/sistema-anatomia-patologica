@@ -171,6 +171,7 @@ async def obter_fase(
     concluida_editavel = bool(
         registro and registro["situacao"] == SITUACAO_CONCLUIDA and not pendente
         and _dentro_do_prazo(registro.get("concluido_em"))
+        and solicitacao["status"] not in {"LAUDO_LIBERADO", STATUS_ARQUIVADO}
     )
     campos = campos_da_fase(fase["etapa"], solicitacao["tipo_exame"])
     pode_salvar = perfil in fase["salvar"] and (pendente or concluida_editavel)
@@ -213,6 +214,7 @@ async def salvar_fase(
     editando_concluida = bool(
         registro and registro["situacao"] == SITUACAO_CONCLUIDA and not pendente
         and _dentro_do_prazo(registro.get("concluido_em"))
+        and solicitacao["status"] not in {"LAUDO_LIBERADO", STATUS_ARQUIVADO}
     )
     if not (pendente or editando_concluida):
         raise HTTPException(status_code=409, detail=f"A solicitação não está na fase {fase['rotulo']} e não pode mais ser editada nela.")
@@ -273,6 +275,9 @@ async def concluir_fase(
         if not proximas:
             raise HTTPException(status_code=409, detail=f"Não há próxima fase configurada após {fase['rotulo']} para {solicitacao['tipo_exame']}.")
         destino, tipo_mov = proximas[0], "CONCLUSAO"
+    # A validação clínica termina antes da liberação oficial: nunca arquivar automaticamente.
+    if destino == "ARQUIVO":
+        destino = "AGUARDANDO_LIBERACAO"
     status = _status_derivado(destino)
     agora = _agora()
     login = _login(usuario)

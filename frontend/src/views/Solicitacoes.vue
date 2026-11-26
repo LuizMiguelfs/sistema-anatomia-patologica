@@ -21,13 +21,7 @@
       </router-link>
     </nav>
 
-    <!-- Arquivados: previsto, ainda não implementado no MVP -->
-    <div v-if="situacao === 'ARQUIVADO'" class="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
-      <p class="text-lg font-semibold text-gray-700">Em breve</p>
-      <p class="mt-1 text-sm text-gray-500">A aba de solicitações arquivadas (do arquivamento mais recente para o mais antigo) faz parte das próximas entregas.</p>
-    </div>
 
-    <template v-else>
       <p class="text-sm text-gray-600">{{ descricaoAba }}</p>
 
       <!-- Filtros -->
@@ -43,7 +37,7 @@
           <option v-for="t in TIPOS_EXAME" :key="t.valor" :value="t.valor">{{ t.rotulo }}</option>
         </select>
         <div class="flex items-center gap-2 text-sm text-gray-600 md:col-span-4">
-          <span class="shrink-0">{{ situacao === 'RETIRADO' ? 'Retirado entre' : 'Recebido entre' }}</span>
+          <span class="shrink-0">{{ situacao === 'RETIRADO' ? 'Retirado entre' : situacao === 'ARQUIVADO' ? 'Atualizado entre' : 'Recebido entre' }}</span>
           <input v-model="filtros.de" type="date" class="min-w-0 flex-1 rounded border p-2 text-sm" aria-label="Data inicial" />
           <span class="shrink-0">e</span>
           <input v-model="filtros.ate" type="date" class="min-w-0 flex-1 rounded border p-2 text-sm" aria-label="Data final" />
@@ -70,9 +64,9 @@
               <th class="px-3 py-2">Prontuário</th>
               <th class="px-3 py-2">Exame</th>
               <th class="px-3 py-2">Amostras</th>
-              <th class="px-3 py-2">{{ situacao === 'RETIRADO' ? 'Retirado em' : 'Recebido em' }}</th>
+              <th class="px-3 py-2">{{ situacao === 'RETIRADO' ? 'Retirado em' : situacao === 'ARQUIVADO' ? 'Arquivado em' : 'Recebido em' }}</th>
               <th v-if="situacao === 'RETIRADO'" class="px-3 py-2">Fase atual</th>
-              <th v-if="ehRecepcao" class="px-3 py-2"></th>
+              <th v-if="estacaoAutenticada" class="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -98,13 +92,14 @@
                 <span class="block text-xs text-gray-500">{{ s.descricao_amostras || 'Sem descrição no AGHU' }}</span>
               </td>
               <td class="px-3 py-3 whitespace-nowrap">
-                {{ formatarDataHora(situacao === 'RETIRADO' ? s.retirado_em : s.criado_em) }}
+                {{ formatarDataHora(situacao === 'RETIRADO' ? s.retirado_em : situacao === 'ARQUIVADO' ? s.atualizado_em : s.criado_em) }}
                 <span v-if="situacao === 'RETIRADO' && s.retirado_por" class="block text-xs text-gray-500">por {{ s.retirado_por }}</span>
               </td>
               <td v-if="situacao === 'RETIRADO'" class="px-3 py-3">{{ rotuloEtapa(s.etapa_atual) }}</td>
-              <td v-if="ehRecepcao" class="px-3 py-3 text-right">
-                <Button v-if="situacao === 'NAO_RETIRADO'" variant="primary" @click="pedirConfirmacao(s, 'retirar')">Marcar como retirado</Button>
-                <Button v-else variant="default" @click="pedirConfirmacao(s, 'desfazer')">Desfazer</Button>
+              <td v-if="estacaoAutenticada" class="px-3 py-3 text-right">
+                <Button v-if="situacao === 'NAO_RETIRADO'" variant="primary" @click="pedirConfirmacao(s, 'retirar')">Confirmar retirada</Button>
+                <Button v-else-if="situacao === 'RETIRADO'" variant="default" @click="pedirConfirmacao(s, 'desfazer')">Desfazer</Button>
+                <Button v-else variant="default" @click="abrirArquivo(s.id)">Histórico e laudos</Button>
               </td>
             </tr>
           </tbody>
@@ -118,10 +113,9 @@
           <Button variant="default" :disabled="pagina >= totalPaginas || carregando" @click="pesquisar(pagina + 1)">Próxima</Button>
         </div>
       </div>
-    </template>
 
     <!-- Confirmação de retirar / desfazer -->
-    <Modal :show="!!confirmacao" @close="confirmacao = null">
+    <Modal :show="!!confirmacao" @close="cancelarConfirmacao">
       <template #header>{{ confirmacao?.acao === 'retirar' ? 'Marcar como retirado' : 'Desfazer retirada' }}</template>
       <div v-if="confirmacao" class="space-y-2 text-sm">
         <p v-if="confirmacao.acao === 'retirar'">
@@ -132,12 +126,35 @@
           Desfazer a retirada da solicitação <strong class="font-mono">{{ confirmacao.item.identificador_interno }}</strong>?
           Ela voltará para "Não retirados".
         </p>
-        <p class="text-xs text-gray-500">A ação fica registrada com seu usuário, data e hora.</p>
+        <label class="block">Login do profissional responsável
+          <input v-model.trim="credencial.username" type="text" autocomplete="off" class="mt-1 w-full rounded border px-2 py-1" />
+        </label>
+        <label class="block">Senha institucional do responsável
+          <input v-model="credencial.password" type="password" autocomplete="off" class="mt-1 w-full rounded border px-2 py-1" />
+        </label>
+        <p class="text-xs text-gray-500">A retirada será atribuída a quem confirmar com a própria credencial, mesmo em estação de outra pessoa. A senha não será armazenada.</p>
       </div>
       <template #footer>
-        <Button variant="default" @click="confirmacao = null">Cancelar</Button>
-        <Button :variant="confirmacao?.acao === 'retirar' ? 'primary' : 'warning'" :loading="processando" @click="confirmar">Confirmar</Button>
+        <Button variant="default" @click="cancelarConfirmacao">Cancelar</Button>
+        <Button :variant="confirmacao?.acao === 'retirar' ? 'primary' : 'warning'" :loading="processando" :disabled="!credencial.username || !credencial.password" @click="confirmar">Confirmar</Button>
       </template>
+    </Modal>
+    <Modal :show="arquivoAberto !== null" @close="arquivoAberto = null">
+      <template #header>Histórico e laudos disponíveis</template>
+      <p v-if="carregandoArquivo" class="text-sm">Carregando...</p>
+      <p v-else-if="!arquivoDados" class="text-sm text-gray-500">Histórico indisponível.</p>
+      <div v-else-if="arquivoDados" class="space-y-3 text-sm">
+        <p class="text-xs text-gray-500">{{ arquivoDados.aviso }}</p>
+        <p>Estado: <strong>{{ arquivoDados.estado }}</strong></p>
+        <p v-if="arquivoDados.liberacao">Evento: {{ arquivoDados.liberacao.referencia }} · {{ formatarDataHora(arquivoDados.liberacao.liberado_em) }}</p>
+        <div v-for="(doc, i) in arquivoDados.documentos" :key="i" class="rounded border p-2">
+          <p class="font-semibold">{{ rotuloEtapa(doc.fase) }} · {{ doc.tipo }}</p>
+          <p class="whitespace-pre-wrap">{{ doc.conteudo }}</p>
+          <p class="text-xs text-gray-500">Validado por {{ doc.validado_por }} · {{ formatarDataHora(doc.validado_em) }}</p>
+        </div>
+        <LinhaDoTempo v-if="arquivoAberto" :solicitacao-id="arquivoAberto" />
+      </div>
+      <template #footer><Button variant="default" @click="arquivoAberto = null">Fechar</Button></template>
     </Modal>
   </div>
 </template>
@@ -147,6 +164,8 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import Button from '../components/Button.vue';
 import Modal from '../components/Modal.vue';
+import LinhaDoTempo from '../components/LinhaDoTempo.vue';
+import { consultarLaudos, type HistoricoLaudo } from '../services/laudos';
 import { useAuthStore } from '../stores/auth';
 import type { SituacaoRetirada, SolicitacaoExame } from '../services/solicitacoes';
 import {
@@ -163,11 +182,14 @@ const LIMITE = 20;
 const route = useRoute();
 const auth = useAuthStore();
 const situacao = computed(() => String(route.meta.situacao || 'NAO_RETIRADO'));
-const ehRecepcao = computed(() => auth.hasRole('RECEPCAO'));
-const colunas = computed(() => 7 + (situacao.value === 'RETIRADO' ? 1 : 0) + (ehRecepcao.value ? 1 : 0));
+// A ação pode ser iniciada de qualquer estação autenticada; o backend reautentica o profissional Recepção.
+const estacaoAutenticada = computed(() => auth.isAuthenticated);
+const colunas = computed(() => 7 + (situacao.value === 'RETIRADO' ? 1 : 0) + (estacaoAutenticada.value ? 1 : 0));
 const descricaoAba = computed(() => situacao.value === 'RETIRADO'
   ? 'Solicitações cujo material já saiu da recepção, da retirada mais recente para a mais antiga.'
-  : 'Solicitações recebidas cujo material ainda está na recepção. Urgências no topo; depois, do recebimento mais antigo para o mais recente.');
+  : situacao.value === 'ARQUIVADO'
+    ? 'Solicitações arquivadas, da mais recente para a mais antiga. O registro oficial do laudo permanece no AGHU.'
+    : 'Solicitações recebidas cujo material ainda está na recepção. Urgências no topo; depois, do recebimento mais antigo para o mais recente.');
 
 const filtros = reactive({ busca: '', tipo_exame: '', de: '', ate: '' });
 const itens = ref<SolicitacaoExame[]>([]);
@@ -180,10 +202,27 @@ const totalPaginas = computed(() => Math.max(1, Math.ceil(total.value / LIMITE))
 
 const confirmacao = ref<{ item: SolicitacaoExame; acao: 'retirar' | 'desfazer' } | null>(null);
 const processando = ref(false);
+const credencial = reactive({ username: '', password: '' });
+const arquivoAberto = ref<number | null>(null);
+const arquivoDados = ref<HistoricoLaudo | null>(null);
+const carregandoArquivo = ref(false);
+function cancelarConfirmacao(): void {
+  confirmacao.value = null;
+  credencial.username = '';
+  credencial.password = '';
+}
+async function abrirArquivo(id: number): Promise<void> {
+  arquivoAberto.value = id;
+  arquivoDados.value = null;
+  carregandoArquivo.value = true;
+  try { arquivoDados.value = await consultarLaudos(id); }
+  catch (e) { erro.value = mensagemErro(e); arquivoAberto.value = null; }
+  finally { carregandoArquivo.value = false; }
+}
 
 /** Carrega a página pedida da aba atual com os filtros. */
 async function pesquisar(novaPagina: number): Promise<void> {
-  if (situacao.value === 'ARQUIVADO') return;
+  // A aba Arquivados usa os mesmos filtros e paginação das demais.
   carregando.value = true;
   erro.value = '';
   try {
@@ -208,6 +247,8 @@ function limpar(): void {
 function pedirConfirmacao(item: SolicitacaoExame, acao: 'retirar' | 'desfazer'): void {
   aviso.value = '';
   erro.value = '';
+  credencial.username = '';
+  credencial.password = '';
   confirmacao.value = { item, acao };
 }
 
@@ -218,16 +259,16 @@ async function confirmar(): Promise<void> {
   processando.value = true;
   try {
     if (acao === 'retirar') {
-      await marcarRetirado(item.id);
+      await marcarRetirado(item.id, { ...credencial });
       aviso.value = `Solicitação ${item.identificador_interno} marcada como retirada.`;
     } else {
-      await desfazerRetirada(item.id);
+      await desfazerRetirada(item.id, { ...credencial });
       aviso.value = `Retirada da solicitação ${item.identificador_interno} desfeita.`;
     }
-    confirmacao.value = null;
+    cancelarConfirmacao();
     await pesquisar(pagina.value);
   } catch (e) {
-    confirmacao.value = null;
+    cancelarConfirmacao();
     erro.value = mensagemErro(e);
   } finally {
     processando.value = false;

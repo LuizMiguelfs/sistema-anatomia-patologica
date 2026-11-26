@@ -89,7 +89,11 @@ def _login(usuario: Dict[str, Any]) -> str:
 
 def _status_derivado(etapa: str) -> str:
     """Status derivado da etapa registrada (RF019): nunca informado pelo cliente."""
-    return STATUS_ARQUIVADO if etapa == ETAPA_ARQUIVO else STATUS_EM_ANDAMENTO
+    if etapa == ETAPA_ARQUIVO:
+        return STATUS_ARQUIVADO
+    if etapa == "AGUARDANDO_LIBERACAO":
+        return "AGUARDANDO_LIBERACAO"
+    return STATUS_EM_ANDAMENTO
 
 
 def _exigir_perfil(usuario: Dict[str, Any], permitidos: set, acao: str) -> None:
